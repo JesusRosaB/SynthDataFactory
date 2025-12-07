@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SynthDataFactory</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        :root { --sidebar-width: 300px; --primary-color: #4e73df; }
+        body { background-color: #f8f9fc; font-family: 'Nunito', sans-serif; overflow: hidden; }
+        
+        #sidebar {
+            width: var(--sidebar-width);
+            height: 100vh;
+            position: fixed;
+            left: 0; top: 0;
+            background: #fff;
+            border-right: 1px solid #e3e6f0;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        #main {
+            margin-left: var(--sidebar-width);
+            height: 100vh;
+            overflow-y: auto;
+            padding: 2rem;
+        }
+
+        .step-card {
+            border: none;
+            border-radius: 0.75rem;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            margin-bottom: 2rem;
+            transition: transform 0.2s;
+        }
+        .step-card:hover { transform: translateY(-2px); }
+        .card-header { background: #fff; border-bottom: 1px solid #e3e6f0; font-weight: bold; color: var(--primary-color); }
+        
+        .field-item {
+            background: #f8f9fc; border-left: 4px solid var(--primary-color);
+            padding: 10px; margin-bottom: 10px; border-radius: 4px;
+        }
+
+        .sink-option { cursor: pointer; opacity: 0.6; border: 2px solid transparent; padding: 10px; border-radius: 8px; text-align: center; }
+        .sink-option.active { opacity: 1; border-color: var(--primary-color); background-color: #f0f4ff; }
+        .sink-option i { font-size: 2rem; display: block; margin-bottom: 5px; }
+
+        .lang-btn { position: absolute; top: 1rem; right: 2rem; }
+    </style>
+</head>
+<body>
+<div id="app">
+    
+    <div id="sidebar" class="p-3">
+        <h4 class="text-primary mb-4"><i class="bi bi-speedometer2"></i> {{ txt.title }}</h4>
+        
+        <div class="card mb-3 bg-primary text-white shadow-sm">
+            <div class="card-body p-3">
+                <small>{{ txt.status.system }}</small>
+                <h6 class="m-0 mt-1" v-if="serverStatus"><i class="bi bi-wifi"></i> {{ txt.status.connected }}</h6>
+                <h6 class="m-0 mt-1 text-warning" v-else><i class="bi bi-wifi-off"></i> {{ txt.status.disconnected }}</h6>
+            </div>
+        </div>
+
+        <h6 class="text-muted text-uppercase text-xs fw-bold mb-3">{{ txt.status.active_sims }}</h6>
+        <div v-if="Object.keys(simulations).length === 0" class="text-center text-muted py-3">
+            <i class="bi bi-pause-circle fs-1"></i><br>{{ txt.status.no_activity }}
+        </div>
+
+        <div v-for="(sim, id) in simulations" :key="id" class="card mb-2 border-0 shadow-sm bg-light">
+            <div class="card-body p-2">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <strong class="text-truncate" style="max-width: 140px;">{{ sim.name }}</strong>
+                    <span class="badge" :class="statusBadge(sim.status)">{{ sim.status }}</span>
+                </div>
+                <div class="progress" style="height: 6px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" :style="{width: (sim.current / sim.total * 100) + '%'}"></div>
+                </div>
+                <div class="d-flex justify-content-between mt-2 align-items-center">
+                    <small class="text-muted">{{ sim.current }}/{{ sim.total }}</small>
+                    <button v-if="sim.status=='running'" @click="stopSim(id)" class="btn btn-xs btn-outline-danger py-0" style="font-size: 0.7rem;">{{ txt.buttons.stop }}</button>
+                </div>
+            </div>
+        </div>
+
+        <hr>
+        <h6 class="text-muted text-uppercase text-xs fw-bold">{{ txt.status.files }}</h6>
+        <ul class="list-group list-group-flush small">
+            <li v-for="f in files" class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0">
+                <span class="text-truncate" :title="f" style="max-width: 180px;">{{ f }}</span>
+                <a :href="'/api/files/download/'+f" class="text-success" :title="txt.buttons.download"><i class="bi bi-cloud-download-fill fs-5"></i></a>
+            </li>
+        </ul>
+        <button @click="loadFiles" class="btn btn-sm btn-light w-100 mt-2">{{ txt.status.refresh }}</button>
+    </div>
+
+    <div id="main">
+        <div class="container-fluid position-relative">
+            
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="text-gray-800">{{ txt.designer_title }}</h2>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-secondary" @click="toggleLang">
+                        <span v-if="lang==='es'">🇬🇧 EN</span>
+                        <span v-else>🇪🇸 ES</span>
+                    </button>
+                    <button class="btn btn-success btn-lg shadow" @click="startSimulation" :disabled="loading">
+                        <span v-if="loading" class="spinner-border spinner-border-sm"></span>
+                        <span v-else><i class="bi bi-rocket-takeoff-fill"></i> {{ txt.buttons.launch }}</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-xl-4 col-lg-5">
+                    <div class="card step-card">
+                        <div class="card-header">{{ txt.config.header }}</div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label>{{ txt.config.name }}</label>
+                                <input v-model="config.simulation_name" type="text" class="form-control">
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label>{{ txt.config.records }}</label>
+                                    <input v-model="config.total_records" type="number" class="form-control">
+                                </div>
+                                <div class="col-6">
+                                    <label>{{ txt.config.delay }}</label>
+                                    <input v-model="config.delay_seconds" type="number" step="0.01" class="form-control">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="d-flex justify-content-between">
+                                    <span>{{ txt.config.device_check }}</span>
+                                    <span class="badge bg-info">{{ config.device_count }}</span>
+                                </label>
+                                <input type="range" class="form-range" min="1" max="50" v-model="config.device_count">
+                                <small class="text-muted" v-if="config.device_count > 1">{{ txt.config.device_note }}</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card step-card">
+                        <div class="card-header">{{ txt.sink.header }}</div>
+                        <div class="card-body">
+                            <div class="row g-2 mb-3">
+                                <div class="col-4" v-for="type in ['file', 'mqtt', 'kafka', 'http', 'rabbitmq']">
+                                    <div class="sink-option" :class="{active: config.target_type === type}" @click="config.target_type = type">
+                                        <i class="bi" :class="getIcon(type)"></i>
+                                        <span class="text-uppercase small fw-bold">{{ type }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-if="config.target_type === 'file'" class="bg-light p-3 rounded fade-in">
+                                <label>{{ txt.sink.format }}:</label>
+                                <select v-model="config.file_format" class="form-select">
+                                    <option value="json">JSON (Array)</option>
+                                    <option value="csv">CSV (Excel)</option>
+                                    <option value="xml">XML</option>
+                                    <option value="toml">TOML / TOON</option>
+                                </select>
+                            </div>
+
+                            <div v-if="config.target_type === 'mqtt'" class="bg-light p-3 rounded fade-in">
+                                <input v-model="config.mqtt_host" :placeholder="txt.sink.ph_host" class="form-control mb-2">
+                                <input v-model="config.mqtt_topic" :placeholder="txt.sink.ph_topic" class="form-control mb-2">
+                            </div>
+
+                            <div v-if="config.target_type === 'http'" class="bg-light p-3 rounded fade-in">
+                                <input v-model="config.http_url" :placeholder="txt.sink.ph_url" class="form-control">
+                            </div>
+
+                            <div v-if="config.target_type === 'kafka'" class="bg-light p-3 rounded fade-in">
+                                <input v-model="config.kafka_bootstrap" :placeholder="txt.sink.ph_bootstrap" class="form-control mb-2">
+                                <input v-model="config.kafka_topic" :placeholder="txt.sink.ph_topic" class="form-control">
+                            </div>
+                             <div v-if="config.target_type === 'rabbitmq'" class="bg-light p-3 rounded fade-in">
+                                <input v-model="config.rabbitmq_host" :placeholder="txt.sink.ph_host" class="form-control mb-2">
+                                <input v-model="config.rabbitmq_queue" :placeholder="txt.sink.ph_queue" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-8 col-lg-7">
+                    <div class="card step-card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span>{{ txt.schema.header }}</span>
+                            <button @click="addField" class="btn btn-sm btn-primary">{{ txt.buttons.add_field }}</button>
+                        </div>
+                        <div class="card-body bg-light">
+                            <div v-if="config.schema_fields.length === 0" class="text-center py-5 text-muted">
+                                <i class="bi bi-table fs-1"></i><br>{{ txt.schema.empty }}
+                            </div>
+                            
+                            <div v-for="(field, idx) in config.schema_fields" :key="idx" class="field-item shadow-sm bg-white d-flex align-items-center gap-2 flex-wrap">
+                                <span class="badge bg-secondary rounded-pill">{{ idx+1 }}</span>
+                                <input v-model="field.name" :placeholder="txt.schema.ph_name" class="form-control form-control-sm" style="width: 150px; font-weight: bold;">
+                                
+                                <select v-model="field.type" class="form-select form-select-sm" style="width: 140px;">
+                                    <option value="int">{{ txt.types.int }}</option>
+                                    <option value="float">{{ txt.types.float }}</option>
+                                    <option value="name">{{ txt.types.name }}</option>
+                                    <option value="email">{{ txt.types.email }}</option>
+                                    <option value="city">{{ txt.types.city }}</option>
+                                    <option value="choice">{{ txt.types.choice }}</option>
+                                    <option value="datetime">{{ txt.types.datetime }}</option>
+                                    <option value="uuid">{{ txt.types.uuid }}</option>
+                                </select>
+
+                                <div v-if="['int','float'].includes(field.type)" class="d-flex gap-1">
+                                    <input v-model="field.min" :placeholder="txt.schema.ph_min" class="form-control form-control-sm" style="width: 60px">
+                                    <input v-model="field.max" :placeholder="txt.schema.ph_max" class="form-control form-control-sm" style="width: 60px">
+                                </div>
+                                <div v-if="field.type === 'choice'" class="flex-grow-1">
+                                    <input :value="field.options ? field.options.join(',') : ''" @input="field.options = $event.target.value.split(',')" :placeholder="txt.schema.ph_opts" class="form-control form-control-sm">
+                                </div>
+
+                                <div class="ms-auto d-flex align-items-center gap-2">
+                                    <small class="text-muted">{{ txt.schema.col_null }}</small>
+                                    <input v-model="field.null_percentage" type="number" class="form-control form-control-sm" style="width: 50px">
+                                    <button @click="removeField(idx)" class="btn btn-outline-danger btn-sm border-0"><i class="bi bi-x-lg"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- DICCIONARIO I18N ---
+    const i18n = {
+        es: {
+            title: "SynthDataFactory",
+            designer_title: "Diseñador de Generación",
+            status: {
+                system: "Estado Sistema",
+                connected: "API Conectada",
+                disconnected: "API Desconectada",
+                active_sims: "Simulaciones Activas",
+                no_activity: "Sin actividad",
+                files: "Archivos Generados",
+                refresh: "Refrescar"
+            },
+            buttons: {
+                clean: "Limpiar",
+                launch: "LANZAR AHORA",
+                stop: "PARAR",
+                add_field: "+ Campo",
+                download: "Descargar"
+            },
+            config: {
+                header: "1. Configuración Global",
+                name: "Nombre Simulación",
+                records: "Total Registros",
+                delay: "Delay (seg)",
+                device_check: "Múltiples Dispositivos",
+                device_note: "Se inyectará un campo sensor_id automáticamente."
+            },
+            sink: {
+                header: "2. Destino (Sink)",
+                format: "Formato",
+                ph_host: "Broker Host (ej: test.mosquitto.org)",
+                ph_port: "Puerto",
+                ph_topic: "Topic / Tema",
+                ph_url: "https://mi-api.com/webhook",
+                ph_bootstrap: "Bootstrap Servers",
+                ph_queue: "Nombre Cola"
+            },
+            schema: {
+                header: "3. Modelo de Datos",
+                empty: "Añade campos para empezar",
+                col_null: "% Null",
+                ph_name: "Nombre Campo",
+                ph_min: "Min",
+                ph_max: "Max",
+                ph_opts: "Op1, Op2, Op3"
+            },
+            types: {
+                int: "Entero",
+                float: "Decimal",
+                name: "Nombre Persona",
+                email: "Email",
+                city: "Ciudad",
+                choice: "Lista Opciones",
+                datetime: "Fecha/Hora",
+                uuid: "UUID"
+            }
+        },
+        en: {
+            title: "SynthDataFactory",
+            designer_title: "Generation Designer",
+            status: {
+                system: "System Status",
+                connected: "API Connected",
+                disconnected: "API Disconnected",
+                active_sims: "Active Simulations",
+                no_activity: "No activity",
+                files: "Generated Files",
+                refresh: "Refresh List"
+            },
+            buttons: {
+                clean: "Reset",
+                launch: "LAUNCH NOW",
+                stop: "STOP",
+                add_field: "+ Field",
+                download: "Download"
+            },
+            config: {
+                header: "1. Global Config",
+                name: "Simulation Name",
+                records: "Total Records",
+                delay: "Delay (sec)",
+                device_check: "Multiple Devices",
+                device_note: "A sensor_id field will be injected automatically."
+            },
+            sink: {
+                header: "2. Target (Sink)",
+                format: "Format",
+                ph_host: "Broker Host (e.g., test.mosquitto.org)",
+                ph_port: "Port",
+                ph_topic: "Topic",
+                ph_url: "https://my-api.com/webhook",
+                ph_bootstrap: "Bootstrap Servers",
+                ph_queue: "Queue Name"
+            },
+            schema: {
+                header: "3. Data Model",
+                empty: "Add fields to start",
+                col_null: "% Null",
+                ph_name: "Field Name",
+                ph_min: "Min",
+                ph_max: "Max",
+                ph_opts: "Op1, Op2, Op3"
+            },
+            types: {
+                int: "Integer",
+                float: "Float",
+                name: "Person Name",
+                email: "Email",
+                city: "City",
+                choice: "Choice List",
+                datetime: "Timestamp",
+                uuid: "UUID"
+            }
+        }
+    };
+
+    const { createApp } = Vue;
+    createApp({
+        data() {
+            return {
+                lang: 'es', // Idioma por defecto
+                serverStatus: false,
+                loading: false,
+                simulations: {},
+                files: [],
+                config: {
+                    simulation_name: "Simulacion_IoT",
+                    total_records: 100,
+                    delay_seconds: 0.1,
+                    device_count: 1,
+                    target_type: 'file',
+                    file_format: 'json',
+                    schema_fields: [
+                        { name: "temperatura", type: "float", min: 20, max: 80, null_percentage: 0 },
+                        { name: "estado", type: "choice", options: ["ON", "OFF", "STANDBY"], null_percentage: 0 }
+                    ],
+                    // Defaults
+                    mqtt_host: "test.mosquitto.org", mqtt_port: 1883, mqtt_topic: "sensor/data",
+                    http_url: "",
+                    kafka_bootstrap: "localhost:9092", kafka_topic: "my-topic",
+                    rabbitmq_host: "localhost", rabbitmq_queue: "my_queue"
+                }
+            }
+        },
+        computed: {
+            txt() {
+                return i18n[this.lang];
+            }
+        },
+        mounted() {
+            this.checkStatus();
+            setInterval(this.pollStatus, 2000);
+            this.loadFiles();
+        },
+        methods: {
+            toggleLang() {
+                this.lang = this.lang === 'es' ? 'en' : 'es';
+            },
+            addField() { this.config.schema_fields.push({name: "nuevo", type: "int", min:0, max:100, null_percentage:0}) },
+            removeField(i) { this.config.schema_fields.splice(i, 1) },
+            getIcon(type) {
+                const map = { 'file': 'bi-file-earmark-text', 'mqtt': 'bi-router', 'kafka': 'bi-bricks', 'http': 'bi-globe', 'rabbitmq': 'bi-box-seam' };
+                return map[type] || 'bi-question';
+            },
+            statusBadge(s) { return {'running':'bg-primary','completed':'bg-success','stopped':'bg-danger'}[s] || 'bg-secondary'; },
+            async checkStatus() {
+                try {
+                    await fetch('/api/simulation/all');
+                    this.serverStatus = true;
+                } catch(e) { this.serverStatus = false; }
+            },
+            async startSimulation() {
+                this.loading = true;
+                try {
+                    await fetch('/api/simulation/start', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(this.config) });
+                    this.pollStatus();
+                } catch(e) { console.error(e); }
+                this.loading = false;
+            },
+            async stopSim(id) { await fetch(`/api/simulation/stop/${id}`, {method:'POST'}); },
+            async pollStatus() {
+                try {
+                    const r = await fetch('/api/simulation/all');
+                    this.simulations = await r.json();
+                    this.serverStatus = true;
+                } catch(e) { this.serverStatus = false; }
+            },
+            async loadFiles() {
+                try {
+                    const r = await fetch('/api/files');
+                    const d = await r.json();
+                    this.files = d.files;
+                } catch(e) { console.error(e); }
+            }
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>

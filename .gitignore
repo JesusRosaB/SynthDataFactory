@@ -1,0 +1,73 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Entornos Virtuales ---
+venv/
+env/
+ENV/
+.env/
+.venv/
+
+# --- Docker ---
+.env
+.env.prod
+.env.dev
+docker-compose.override.yml
+
+# --- Simulador DATA (La parte importante) ---
+# Ignorar archivos sueltos de datos si se generan por error en la raíz
+*.json
+*.csv
+*.xml
+*.toml
+
+# Ignorar TODO el contenido de la carpeta de salida...
+data_output/*
+# ...PERO mantener el archivo .gitkeep para que la carpeta exista en el repo
+!data_output/.gitkeep
+
+# Si por error se generan datos dentro de backend, los ignoramos también
+backend/data_output/*
+!backend/data_output/.gitkeep
+
+# --- Frontend / Web ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# --- IDEs y Sistema Operativo ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.vscode/
+*.code-workspace
+.idea/
+
+# --- Logs ---
+*.log
+celerybeat-schedule

@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pydantic
+faker
+pandas
+redis
+rq
+paho-mqtt
+kafka-python
+pika
+requests
+toml
+dict2xml
