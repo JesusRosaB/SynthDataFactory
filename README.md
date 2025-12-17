@@ -16,6 +16,11 @@ Este no es un simple script de Python. Es una arquitectura completa de microserv
 
 - **🎨 Diseño Visual No-Code**: Interfaz web intuitiva (Vue.js + Bootstrap 5) para diseñar tus modelos de datos sin programar.
 
+- **💾 Persistencia Inteligente**: 
+  - **Auto-guardado**: Tu configuración se guarda automáticamente mientras trabajas.
+  - **Plantillas Reutilizables**: Guarda, carga y duplica configuraciones con nombres personalizados.
+  - **Exportar/Importar**: Comparte configuraciones entre equipos como archivos JSON.
+
 - **📤 Multi-Salida (Sinks)**: Envía datos a donde necesites:
   - **📂 Archivos**: JSON, CSV, XML, TOML (Descarga directa).
   - **📡 IoT/Messaging**: MQTT, Kafka, RabbitMQ.
@@ -31,6 +36,10 @@ Este no es un simple script de Python. Es una arquitectura completa de microserv
 - **🎛️ Control Total**: Start, Stop (inmediato) y monitorización de progreso en tiempo real.
 
 - **🏭 Modo Multi-Sensor**: Simula flotas de dispositivos (1 a 1000+) inyectando IDs únicos rotativos.
+
+- **🔍 Vista Previa**: Visualiza cómo será el JSON generado antes de lanzar la simulación.
+
+- **✅ Validación Automática**: El sistema verifica que la configuración sea válida antes de ejecutar.
 
 ---
 
@@ -92,6 +101,8 @@ Define el comportamiento general de la simulación:
 - **Delay**: Tiempo de espera entre mensajes (0 para máxima velocidad).
 - **Dispositivos**: Si pones > 1, el sistema inyectará automáticamente un campo `sensor_id` que rotará entre IDs virtuales generados.
 
+💡 **Tip**: Tu configuración se guarda automáticamente. Si recargas la página, todo permanecerá como lo dejaste.
+
 ### 2. Elegir Destino (Sink)
 
 Selecciona dónde quieres que vayan los datos:
@@ -112,11 +123,64 @@ Añade campos dinámicamente:
   - **Pesos**: Puedes definir probabilidades (Ej: 0.8, 0.1, 0.1) para que "Rojo" salga el 80% de las veces.
 - **Nulos**: Define un `% Null` para simular datos sucios o fallos de lectura.
 
-### 4. Lanzar y Monitorizar
+🔍 **Usa la Vista Previa**: Antes de lanzar, haz clic en "Vista Previa" para ver cómo será el JSON generado.
 
-1. Pulsa **"LANZAR AHORA"**. Verás el progreso en la barra lateral derecha.
-2. Puedes pausar la simulación en cualquier momento con el botón **STOP**.
-3. Si elegiste "File", aparecerá el botón de descarga 📥 al finalizar.
+### 4. Gestión de Plantillas
+
+**SynthDataFactory** ahora incluye un potente sistema de gestión de configuraciones:
+
+#### Guardar una Plantilla
+
+1. Diseña tu configuración (pasos 1-3).
+2. Ve a la pestaña **"Plantillas"** en el sidebar.
+3. Haz clic en **"Guardar Plantilla"**.
+4. Asigna un nombre descriptivo (Ej: "Sensores Temperatura", "Usuarios E-commerce").
+
+#### Cargar una Plantilla
+
+1. Ve a la pestaña **"Plantillas"**.
+2. Haz clic sobre la plantilla que desees usar.
+3. ¡Tu configuración se cargará instantáneamente!
+
+#### Otras Operaciones
+
+- **Duplicar** 📋: Crea una copia para experimentar sin perder la original.
+- **Eliminar** 🗑️: Borra plantillas que ya no necesites.
+- **Exportar** 💾: Descarga la configuración actual como JSON.
+- **Importar** 📤: Carga configuraciones desde archivos JSON.
+
+💡 **Caso de Uso**: Crea plantillas para cada proyecto o tipo de simulación (IoT, E-commerce, Logs, etc.) y reutilízalas cuando necesites.
+
+### 5. Lanzar y Monitorizar
+
+1. Pulsa **"LANZAR AHORA"**. El sistema validará tu configuración automáticamente.
+2. Verás el progreso en tiempo real en la pestaña **"Activas"** del sidebar.
+3. Puedes pausar la simulación en cualquier momento con el botón **STOP**.
+4. Si elegiste "File", aparecerá el botón de descarga 📥 en la pestaña **"Archivos"** al finalizar.
+
+---
+
+## 🎯 Interfaz Mejorada
+
+La nueva versión incluye una interfaz reorganizada con **3 pestañas** en el sidebar:
+
+### 📌 Pestañas del Sidebar
+
+1. **🎬 Activas**: 
+   - Monitoriza simulaciones en curso.
+   - Progreso en tiempo real.
+   - Control de parada inmediata.
+
+2. **📑 Plantillas**: 
+   - Lista de configuraciones guardadas.
+   - Vista rápida: número de registros y campos.
+   - Acciones: Cargar, Duplicar, Eliminar.
+   - Exportar/Importar configuraciones.
+
+3. **📁 Archivos**: 
+   - Archivos generados disponibles para descarga.
+   - Botón de actualización de lista.
+   - Descarga directa con un clic.
 
 ---
 
@@ -127,7 +191,7 @@ Si quieres modificar el código (Python o JS):
 ### Estructura de Carpetas
 
 ```
-mega-simulator/
+SynthDataFactory/
 ├── docker-compose.yml
 ├── backend/
 │   ├── main.py          # API Endpoints
@@ -136,7 +200,8 @@ mega-simulator/
 │   │   ├── generator.py # Lógica Faker/Random
 │   │   └── sinks.py     # Conectores (Kafka, MQTT...)
 └── frontend/
-    ├── src/             # HTML/JS (Vue)
+    ├── src/
+    │   └── index.html   # UI Principal (Vue.js)
     └── nginx.conf       # Config Proxy
 ```
 
@@ -158,6 +223,85 @@ docker-compose up
 docker-compose logs -f
 ```
 
+**Ver logs de un servicio específico**:
+
+```bash
+docker-compose logs -f worker
+docker-compose logs -f backend
+```
+
+---
+
+## 🆕 Novedades de la Última Versión
+
+### v2.0 - "Smart Persistence"
+
+✨ **Nuevas Características**:
+
+- **🔄 Auto-guardado**: Las configuraciones se guardan automáticamente mientras trabajas.
+- **📚 Sistema de Plantillas**: Guarda, carga y gestiona múltiples configuraciones.
+- **📋 Duplicar Plantillas**: Experimenta sin perder tus configuraciones originales.
+- **💾 Exportar/Importar**: Comparte configuraciones entre equipos o proyectos.
+- **🔍 Vista Previa JSON**: Visualiza el resultado antes de ejecutar.
+- **✅ Validación Mejorada**: El sistema verifica la configuración antes de lanzar.
+- **🎨 Interfaz Reorganizada**: Sistema de pestañas para mejor organización.
+- **🌐 Multi-idioma Mejorado**: Español e Inglés con persistencia de preferencia.
+
+### Mejoras de UX
+
+- Indicador visual de auto-guardado.
+- Transiciones y animaciones suaves.
+- Hover effects para mejor interactividad.
+- Modals mejorados para acciones importantes.
+- Mensajes de validación claros.
+
+---
+
+## 💡 Casos de Uso
+
+### 1. Testing de Sistemas Big Data
+
+Genera millones de registros realistas para probar tu pipeline de datos:
+
+```
+Configuración: 1.000.000 registros
+Sink: Kafka Topic
+Schema: user_id, timestamp, action, revenue
+```
+
+### 2. Simulación de Flota IoT
+
+Simula 500 sensores enviando datos cada 5 segundos:
+
+```
+Configuración: 10.000 registros
+Dispositivos: 500
+Delay: 5 segundos
+Sink: MQTT
+Schema: temperatura, humedad, bateria, gps_lat, gps_lon
+```
+
+### 3. Datos de Prueba para Desarrollo
+
+Genera CSVs con datos de usuarios para tu aplicación:
+
+```
+Configuración: 5.000 registros
+Sink: File (CSV)
+Schema: nombre, email, ciudad, edad, suscripcion
+```
+
+### 4. Load Testing de APIs
+
+Bombardea tu API con tráfico realista:
+
+```
+Configuración: 100.000 registros
+Delay: 0 (máxima velocidad)
+Sink: HTTP Webhook
+Schema: request_id, endpoint, method, payload
+```
+
 ---
 
 ## 🤝 Contribución
@@ -170,11 +314,29 @@ docker-compose logs -f
 4. Push a la rama (`git push origin feature/AmazingFeature`).
 5. Abre una **Pull Request**.
 
+### Áreas de Mejora
+
+- 🔌 Nuevos conectores (PostgreSQL, MongoDB, S3, etc.)
+- 📊 Visualización de datos generados
+- 🔐 Autenticación y multi-usuario
+- 📈 Métricas y estadísticas de simulaciones
+- 🎲 Más tipos de datos (JSON anidado, Arrays, etc.)
+
 ---
 
 ## 📄 Licencia
 
 Distribuido bajo la licencia MIT. Ver `LICENSE` para más información.
+
+---
+
+## 🙏 Agradecimientos
+
+- [Faker](https://faker.readthedocs.io/) - Generación de datos realistas
+- [FastAPI](https://fastapi.tiangolo.com/) - Framework API moderno
+- [Vue.js](https://vuejs.org/) - Framework JavaScript progresivo
+- [Redis](https://redis.io/) - Almacenamiento en memoria
+- [Python-RQ](https://python-rq.org/) - Background jobs
 
 ---
 

@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <style>
-        :root { --sidebar-width: 300px; --primary-color: #4e73df; }
+        :root { --sidebar-width: 320px; --primary-color: #4e73df; }
         body { background-color: #f8f9fc; font-family: 'Nunito', sans-serif; overflow: hidden; }
         
         #sidebar {
@@ -43,16 +43,71 @@
             padding: 10px; margin-bottom: 10px; border-radius: 4px;
         }
 
-        .sink-option { cursor: pointer; opacity: 0.6; border: 2px solid transparent; padding: 10px; border-radius: 8px; text-align: center; }
+        .sink-option { cursor: pointer; opacity: 0.6; border: 2px solid transparent; padding: 10px; border-radius: 8px; text-align: center; transition: all 0.2s; }
         .sink-option.active { opacity: 1; border-color: var(--primary-color); background-color: #f0f4ff; }
+        .sink-option:hover { opacity: 0.8; }
         .sink-option i { font-size: 2rem; display: block; margin-bottom: 5px; }
 
-        .lang-btn { position: absolute; top: 1rem; right: 2rem; }
+        .template-item {
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        .template-item:hover {
+            background: #f0f4ff;
+            border-color: var(--primary-color);
+        }
+
+        .autosave-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 0.5rem 1rem;
+            background: #28a745;
+            color: white;
+            border-radius: 2rem;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 1000;
+        }
+        .autosave-indicator.show {
+            opacity: 1;
+        }
+
+        .nav-tabs .nav-link {
+            color: #6c757d;
+            border: none;
+            border-bottom: 2px solid transparent;
+        }
+        .nav-tabs .nav-link.active {
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--primary-color);
+            background: transparent;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .modal-backdrop.show {
+            opacity: 0.5;
+        }
     </style>
 </head>
 <body>
 <div id="app">
     
+    <!-- Autosave Indicator -->
+    <div class="autosave-indicator" :class="{show: showAutosave}">
+        <i class="bi bi-check-circle-fill"></i> {{ txt.status.autosaved }}
+    </div>
+
     <div id="sidebar" class="p-3">
         <h4 class="text-primary mb-4"><i class="bi bi-speedometer2"></i> {{ txt.title }}</h4>
         
@@ -64,36 +119,103 @@
             </div>
         </div>
 
-        <h6 class="text-muted text-uppercase text-xs fw-bold mb-3">{{ txt.status.active_sims }}</h6>
-        <div v-if="Object.keys(simulations).length === 0" class="text-center text-muted py-3">
-            <i class="bi bi-pause-circle fs-1"></i><br>{{ txt.status.no_activity }}
-        </div>
-
-        <div v-for="(sim, id) in simulations" :key="id" class="card mb-2 border-0 shadow-sm bg-light">
-            <div class="card-body p-2">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    <strong class="text-truncate" style="max-width: 140px;">{{ sim.name }}</strong>
-                    <span class="badge" :class="statusBadge(sim.status)">{{ sim.status }}</span>
-                </div>
-                <div class="progress" style="height: 6px;">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" :style="{width: (sim.current / sim.total * 100) + '%'}"></div>
-                </div>
-                <div class="d-flex justify-content-between mt-2 align-items-center">
-                    <small class="text-muted">{{ sim.current }}/{{ sim.total }}</small>
-                    <button v-if="sim.status=='running'" @click="stopSim(id)" class="btn btn-xs btn-outline-danger py-0" style="font-size: 0.7rem;">{{ txt.buttons.stop }}</button>
-                </div>
-            </div>
-        </div>
-
-        <hr>
-        <h6 class="text-muted text-uppercase text-xs fw-bold">{{ txt.status.files }}</h6>
-        <ul class="list-group list-group-flush small">
-            <li v-for="f in files" class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0">
-                <span class="text-truncate" :title="f" style="max-width: 180px;">{{ f }}</span>
-                <a :href="'/api/files/download/'+f" class="text-success" :title="txt.buttons.download"><i class="bi bi-cloud-download-fill fs-5"></i></a>
+        <!-- Tabs Navigation -->
+        <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" :class="{active: activeTab==='sims'}" @click="activeTab='sims'">
+                    <i class="bi bi-play-circle"></i> {{ txt.tabs.simulations }}
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" :class="{active: activeTab==='templates'}" @click="activeTab='templates'">
+                    <i class="bi bi-bookmarks"></i> {{ txt.tabs.templates }}
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" :class="{active: activeTab==='files'}" @click="activeTab='files'">
+                    <i class="bi bi-file-earmark-text"></i> {{ txt.tabs.files }}
+                </button>
             </li>
         </ul>
-        <button @click="loadFiles" class="btn btn-sm btn-light w-100 mt-2">{{ txt.status.refresh }}</button>
+
+        <!-- Tab Content -->
+        <div class="tab-content">
+            <!-- Simulations Tab -->
+            <div v-show="activeTab==='sims'">
+                <div v-if="Object.keys(simulations).length === 0" class="text-center text-muted py-3">
+                    <i class="bi bi-pause-circle fs-1"></i><br>{{ txt.status.no_activity }}
+                </div>
+                <div v-for="(sim, id) in simulations" :key="id" class="card mb-2 border-0 shadow-sm bg-light">
+                    <div class="card-body p-2">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong class="text-truncate" style="max-width: 140px;">{{ sim.name }}</strong>
+                            <span class="badge" :class="statusBadge(sim.status)">{{ sim.status }}</span>
+                        </div>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" :style="{width: (sim.current / sim.total * 100) + '%'}"></div>
+                        </div>
+                        <div class="d-flex justify-content-between mt-2 align-items-center">
+                            <small class="text-muted">{{ sim.current }}/{{ sim.total }}</small>
+                            <button v-if="sim.status=='running'" @click="stopSim(id)" class="btn btn-xs btn-outline-danger py-0" style="font-size: 0.7rem;">{{ txt.buttons.stop }}</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Templates Tab -->
+            <div v-show="activeTab==='templates'">
+                <button @click="showSaveTemplateModal = true" class="btn btn-sm btn-primary w-100 mb-3">
+                    <i class="bi bi-save"></i> {{ txt.buttons.save_template }}
+                </button>
+                
+                <div v-if="templates.length === 0" class="text-center text-muted py-3">
+                    <i class="bi bi-bookmarks fs-1"></i><br>{{ txt.templates.empty }}
+                </div>
+                
+                <div v-for="template in templates" :key="template.name" class="template-item mb-2">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1" @click="loadTemplate(template.name)">
+                            <strong class="d-block">{{ template.name }}</strong>
+                            <small class="text-muted">{{ template.records }} {{ txt.templates.records }} · {{ template.fields }} {{ txt.templates.fields }}</small>
+                        </div>
+                        <div class="btn-group btn-group-sm">
+                            <button @click="duplicateTemplate(template.name)" class="btn btn-outline-secondary border-0" :title="txt.buttons.duplicate">
+                                <i class="bi bi-files"></i>
+                            </button>
+                            <button @click="deleteTemplate(template.name)" class="btn btn-outline-danger border-0" :title="txt.buttons.delete">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+                <div class="d-flex gap-2">
+                    <button @click="exportConfig" class="btn btn-sm btn-outline-secondary flex-grow-1">
+                        <i class="bi bi-download"></i> {{ txt.buttons.export }}
+                    </button>
+                    <button @click="$refs.importFile.click()" class="btn btn-sm btn-outline-secondary flex-grow-1">
+                        <i class="bi bi-upload"></i> {{ txt.buttons.import }}
+                    </button>
+                    <input ref="importFile" type="file" accept=".json" @change="importConfig" style="display:none">
+                </div>
+            </div>
+
+            <!-- Files Tab -->
+            <div v-show="activeTab==='files'">
+                <ul class="list-group list-group-flush small">
+                    <li v-for="f in files" class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0">
+                        <span class="text-truncate" :title="f" style="max-width: 180px;">{{ f }}</span>
+                        <a :href="'/api/files/download/'+f" class="text-success" :title="txt.buttons.download">
+                            <i class="bi bi-cloud-download-fill fs-5"></i>
+                        </a>
+                    </li>
+                </ul>
+                <button @click="loadFiles" class="btn btn-sm btn-light w-100 mt-2">
+                    <i class="bi bi-arrow-clockwise"></i> {{ txt.status.refresh }}
+                </button>
+            </div>
+        </div>
     </div>
 
     <div id="main">
@@ -102,6 +224,9 @@
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="text-gray-800">{{ txt.designer_title }}</h2>
                 <div class="d-flex gap-2">
+                    <button class="btn btn-outline-info" @click="showPreview = true">
+                        <i class="bi bi-eye"></i> {{ txt.buttons.preview }}
+                    </button>
                     <button class="btn btn-outline-secondary" @click="toggleLang">
                         <span v-if="lang==='es'">🇬🇧 EN</span>
                         <span v-else>🇪🇸 ES</span>
@@ -125,11 +250,11 @@
                             <div class="row g-2 mb-3">
                                 <div class="col-6">
                                     <label>{{ txt.config.records }}</label>
-                                    <input v-model="config.total_records" type="number" class="form-control">
+                                    <input v-model.number="config.total_records" type="number" class="form-control">
                                 </div>
                                 <div class="col-6">
                                     <label>{{ txt.config.delay }}</label>
-                                    <input v-model="config.delay_seconds" type="number" step="0.01" class="form-control">
+                                    <input v-model.number="config.delay_seconds" type="number" step="0.01" class="form-control">
                                 </div>
                             </div>
                             <div class="mb-3">
@@ -137,7 +262,7 @@
                                     <span>{{ txt.config.device_check }}</span>
                                     <span class="badge bg-info">{{ config.device_count }}</span>
                                 </label>
-                                <input type="range" class="form-range" min="1" max="50" v-model="config.device_count">
+                                <input type="range" class="form-range" min="1" max="50" v-model.number="config.device_count">
                                 <small class="text-muted" v-if="config.device_count > 1">{{ txt.config.device_note }}</small>
                             </div>
                         </div>
@@ -178,7 +303,7 @@
                                 <input v-model="config.kafka_bootstrap" :placeholder="txt.sink.ph_bootstrap" class="form-control mb-2">
                                 <input v-model="config.kafka_topic" :placeholder="txt.sink.ph_topic" class="form-control">
                             </div>
-                             <div v-if="config.target_type === 'rabbitmq'" class="bg-light p-3 rounded fade-in">
+                            <div v-if="config.target_type === 'rabbitmq'" class="bg-light p-3 rounded fade-in">
                                 <input v-model="config.rabbitmq_host" :placeholder="txt.sink.ph_host" class="form-control mb-2">
                                 <input v-model="config.rabbitmq_queue" :placeholder="txt.sink.ph_queue" class="form-control">
                             </div>
@@ -199,7 +324,7 @@
                             
                             <div v-for="(field, idx) in config.schema_fields" :key="idx" class="field-item shadow-sm bg-white d-flex align-items-center gap-2 flex-wrap">
                                 <span class="badge bg-secondary rounded-pill">{{ idx+1 }}</span>
-                                <input v-model="field.name" :placeholder="txt.schema.ph_name" class="form-control form-control-sm" style="width: 150px; font-weight: bold;">
+                                <input v-model="field.name" :placeholder="txt.schema.ph_name" class="form-control form-control-sm" style="width: 130px; font-weight: bold;">
                                 
                                 <select v-model="field.type" class="form-select form-select-sm" style="width: 140px;">
                                     <option value="int">{{ txt.types.int }}</option>
@@ -213,16 +338,16 @@
                                 </select>
 
                                 <div v-if="['int','float'].includes(field.type)" class="d-flex gap-1">
-                                    <input v-model="field.min" :placeholder="txt.schema.ph_min" class="form-control form-control-sm" style="width: 60px">
-                                    <input v-model="field.max" :placeholder="txt.schema.ph_max" class="form-control form-control-sm" style="width: 60px">
+                                    <input v-model.number="field.min" :placeholder="txt.schema.ph_min" class="form-control form-control-sm" style="width: 60px">
+                                    <input v-model.number="field.max" :placeholder="txt.schema.ph_max" class="form-control form-control-sm" style="width: 60px">
                                 </div>
                                 <div v-if="field.type === 'choice'" class="flex-grow-1">
-                                    <input :value="field.options ? field.options.join(',') : ''" @input="field.options = $event.target.value.split(',')" :placeholder="txt.schema.ph_opts" class="form-control form-control-sm">
+                                    <input :value="field.options ? field.options.join(',') : ''" @input="field.options = $event.target.value.split(',').map(s=>s.trim())" :placeholder="txt.schema.ph_opts" class="form-control form-control-sm">
                                 </div>
 
                                 <div class="ms-auto d-flex align-items-center gap-2">
                                     <small class="text-muted">{{ txt.schema.col_null }}</small>
-                                    <input v-model="field.null_percentage" type="number" class="form-control form-control-sm" style="width: 50px">
+                                    <input v-model.number="field.null_percentage" type="number" class="form-control form-control-sm" style="width: 50px">
                                     <button @click="removeField(idx)" class="btn btn-outline-danger btn-sm border-0"><i class="bi bi-x-lg"></i></button>
                                 </div>
                             </div>
@@ -232,6 +357,46 @@
             </div>
         </div>
     </div>
+
+    <!-- Save Template Modal -->
+    <div class="modal fade" :class="{show: showSaveTemplateModal, 'd-block': showSaveTemplateModal}" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">{{ txt.templates.save_title }}</h5>
+                    <button type="button" class="btn-close" @click="showSaveTemplateModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">{{ txt.templates.name_label }}</label>
+                    <input v-model="newTemplateName" type="text" class="form-control" :placeholder="txt.templates.name_placeholder">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @click="showSaveTemplateModal = false">{{ txt.buttons.cancel }}</button>
+                    <button type="button" class="btn btn-primary" @click="saveTemplate">{{ txt.buttons.save }}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div class="modal fade" :class="{show: showPreview, 'd-block': showPreview}" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">{{ txt.preview.title }}</h5>
+                    <button type="button" class="btn-close" @click="showPreview = false"></button>
+                </div>
+                <div class="modal-body">
+                    <pre class="bg-dark text-light p-3 rounded" style="max-height: 500px; overflow-y: auto;"><code>{{ generatePreview() }}</code></pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @click="showPreview = false">{{ txt.buttons.close }}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="showSaveTemplateModal || showPreview" class="modal-backdrop fade show"></div>
 </div>
 
 <script>
@@ -247,14 +412,29 @@
                 active_sims: "Simulaciones Activas",
                 no_activity: "Sin actividad",
                 files: "Archivos Generados",
-                refresh: "Refrescar"
+                refresh: "Refrescar",
+                autosaved: "Guardado automático"
+            },
+            tabs: {
+                simulations: "Activas",
+                templates: "Plantillas",
+                files: "Archivos"
             },
             buttons: {
                 clean: "Limpiar",
                 launch: "LANZAR AHORA",
                 stop: "PARAR",
                 add_field: "+ Campo",
-                download: "Descargar"
+                download: "Descargar",
+                save_template: "Guardar Plantilla",
+                duplicate: "Duplicar",
+                delete: "Eliminar",
+                export: "Exportar",
+                import: "Importar",
+                preview: "Vista Previa",
+                cancel: "Cancelar",
+                save: "Guardar",
+                close: "Cerrar"
             },
             config: {
                 header: "1. Configuración Global",
@@ -292,6 +472,21 @@
                 choice: "Lista Opciones",
                 datetime: "Fecha/Hora",
                 uuid: "UUID"
+            },
+            templates: {
+                empty: "Sin plantillas guardadas",
+                save_title: "Guardar Plantilla",
+                name_label: "Nombre de la plantilla",
+                name_placeholder: "Ej: Sensores IoT",
+                records: "registros",
+                fields: "campos"
+            },
+            preview: {
+                title: "Vista Previa del JSON"
+            },
+            validation: {
+                no_fields: "Debes añadir al menos un campo al esquema",
+                invalid_config: "Configuración inválida. Revisa los campos."
             }
         },
         en: {
@@ -304,14 +499,29 @@
                 active_sims: "Active Simulations",
                 no_activity: "No activity",
                 files: "Generated Files",
-                refresh: "Refresh List"
+                refresh: "Refresh List",
+                autosaved: "Auto-saved"
+            },
+            tabs: {
+                simulations: "Active",
+                templates: "Templates",
+                files: "Files"
             },
             buttons: {
                 clean: "Reset",
                 launch: "LAUNCH NOW",
                 stop: "STOP",
                 add_field: "+ Field",
-                download: "Download"
+                download: "Download",
+                save_template: "Save Template",
+                duplicate: "Duplicate",
+                delete: "Delete",
+                export: "Export",
+                import: "Import",
+                preview: "Preview",
+                cancel: "Cancel",
+                save: "Save",
+                close: "Close"
             },
             config: {
                 header: "1. Global Config",
@@ -349,6 +559,21 @@
                 choice: "Choice List",
                 datetime: "Timestamp",
                 uuid: "UUID"
+            },
+            templates: {
+                empty: "No saved templates",
+                save_title: "Save Template",
+                name_label: "Template name",
+                name_placeholder: "e.g., IoT Sensors",
+                records: "records",
+                fields: "fields"
+            },
+            preview: {
+                title: "JSON Preview"
+            },
+            validation: {
+                no_fields: "You must add at least one field to the schema",
+                invalid_config: "Invalid configuration. Check the fields."
             }
         }
     };
@@ -357,11 +582,18 @@
     createApp({
         data() {
             return {
-                lang: 'es', // Idioma por defecto
+                lang: 'es',
                 serverStatus: false,
                 loading: false,
                 simulations: {},
                 files: [],
+                activeTab: 'sims',
+                templates: [],
+                showSaveTemplateModal: false,
+                showPreview: false,
+                newTemplateName: '',
+                showAutosave: false,
+                autosaveTimeout: null,
                 config: {
                     simulation_name: "Simulacion_IoT",
                     total_records: 100,
@@ -373,7 +605,6 @@
                         { name: "temperatura", type: "float", min: 20, max: 80, null_percentage: 0 },
                         { name: "estado", type: "choice", options: ["ON", "OFF", "STANDBY"], null_percentage: 0 }
                     ],
-                    // Defaults
                     mqtt_host: "test.mosquitto.org", mqtt_port: 1883, mqtt_topic: "sensor/data",
                     http_url: "",
                     kafka_bootstrap: "localhost:9092", kafka_topic: "my-topic",
@@ -386,7 +617,17 @@
                 return i18n[this.lang];
             }
         },
-        mounted() {
+        watch: {
+            config: {
+                handler() {
+                    this.scheduleAutosave();
+                },
+                deep: true
+            }
+        },
+        async mounted() {
+            await this.loadFromStorage();
+            await this.loadTemplates();
             this.checkStatus();
             setInterval(this.pollStatus, 2000);
             this.loadFiles();
@@ -394,42 +635,367 @@
         methods: {
             toggleLang() {
                 this.lang = this.lang === 'es' ? 'en' : 'es';
+                this.saveToStorage();
             },
-            addField() { this.config.schema_fields.push({name: "nuevo", type: "int", min:0, max:100, null_percentage:0}) },
-            removeField(i) { this.config.schema_fields.splice(i, 1) },
+            
+            // ===== STORAGE HELPER (Compatible con window.storage y localStorage) =====
+            async storageGet(key) {
+                if (typeof window.storage !== 'undefined') {
+                    try {
+                        const result = await window.storage.get(key);
+                        return result ? result.value : null;
+                    } catch (e) {
+                        return null;
+                    }
+                } else {
+                    return localStorage.getItem(key);
+                }
+            },
+            
+            async storageSet(key, value) {
+                if (typeof window.storage !== 'undefined') {
+                    try {
+                        await window.storage.set(key, value);
+                    } catch (e) {
+                        console.error('Storage error:', e);
+                    }
+                } else {
+                    localStorage.setItem(key, value);
+                }
+            },
+            
+            async storageDelete(key) {
+                if (typeof window.storage !== 'undefined') {
+                    try {
+                        await window.storage.delete(key);
+                    } catch (e) {
+                        console.error('Storage error:', e);
+                    }
+                } else {
+                    localStorage.removeItem(key);
+                }
+            },
+            
+            async storageList(prefix) {
+                if (typeof window.storage !== 'undefined') {
+                    try {
+                        const result = await window.storage.list(prefix);
+                        return result ? result.keys : [];
+                    } catch (e) {
+                        return [];
+                    }
+                } else {
+                    const keys = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key.startsWith(prefix)) {
+                            keys.push(key);
+                        }
+                    }
+                    return keys;
+                }
+            },
+            
+            // ===== STORAGE METHODS =====
+            async loadFromStorage() {
+                try {
+                    const savedData = await this.storageGet('current_config');
+                    if (savedData) {
+                        const saved = JSON.parse(savedData);
+                        this.config = saved.config || this.config;
+                        this.lang = saved.lang || 'es';
+                    }
+                } catch (e) {
+                    console.log('No previous config found');
+                }
+            },
+            
+            async saveToStorage() {
+                try {
+                    await this.storageSet('current_config', JSON.stringify({
+                        config: this.config,
+                        lang: this.lang
+                    }));
+                } catch (e) {
+                    console.error('Error saving config:', e);
+                }
+            },
+            
+            scheduleAutosave() {
+                if (this.autosaveTimeout) {
+                    clearTimeout(this.autosaveTimeout);
+                }
+                this.autosaveTimeout = setTimeout(() => {
+                    this.saveToStorage();
+                    this.showAutosaveIndicator();
+                }, 1000);
+            },
+            
+            showAutosaveIndicator() {
+                this.showAutosave = true;
+                setTimeout(() => {
+                    this.showAutosave = false;
+                }, 2000);
+            },
+            
+            // ===== TEMPLATE METHODS =====
+            async loadTemplates() {
+                try {
+                    const keys = await this.storageList('template:');
+                    this.templates = [];
+                    
+                    for (const key of keys) {
+                        const templateData = await this.storageGet(key);
+                        if (templateData) {
+                            const template = JSON.parse(templateData);
+                            const name = key.replace('template:', '');
+                            this.templates.push({
+                                name: name,
+                                records: template.total_records,
+                                fields: template.schema_fields.length,
+                                data: template
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.log('No templates found');
+                }
+            },
+            
+            async saveTemplate() {
+                if (!this.newTemplateName.trim()) {
+                    alert(this.txt.templates.name_placeholder);
+                    return;
+                }
+                
+                try {
+                    const templateName = this.newTemplateName.trim();
+                    await this.storageSet(`template:${templateName}`, JSON.stringify(this.config));
+                    this.showSaveTemplateModal = false;
+                    this.newTemplateName = '';
+                    await this.loadTemplates();
+                    this.activeTab = 'templates';
+                } catch (e) {
+                    console.error('Error saving template:', e);
+                    alert('Error al guardar la plantilla');
+                }
+            },
+            
+            async loadTemplate(name) {
+                try {
+                    const templateData = await this.storageGet(`template:${name}`);
+                    if (templateData) {
+                        this.config = JSON.parse(templateData);
+                        this.activeTab = 'sims';
+                        this.showAutosaveIndicator();
+                    }
+                } catch (e) {
+                    console.error('Error loading template:', e);
+                }
+            },
+            
+            async deleteTemplate(name) {
+                if (confirm(`¿Eliminar plantilla "${name}"?`)) {
+                    try {
+                        await this.storageDelete(`template:${name}`);
+                        await this.loadTemplates();
+                    } catch (e) {
+                        console.error('Error deleting template:', e);
+                    }
+                }
+            },
+            
+            async duplicateTemplate(name) {
+                const newName = prompt(`Nuevo nombre para la copia:`, `${name} (copia)`);
+                if (newName && newName.trim()) {
+                    try {
+                        const templateData = await this.storageGet(`template:${name}`);
+                        if (templateData) {
+                            await this.storageSet(`template:${newName.trim()}`, templateData);
+                            await this.loadTemplates();
+                        }
+                    } catch (e) {
+                        console.error('Error duplicating template:', e);
+                    }
+                }
+            },
+            
+            // ===== EXPORT/IMPORT =====
+            exportConfig() {
+                const dataStr = JSON.stringify(this.config, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${this.config.simulation_name}_config.json`;
+                link.click();
+                URL.revokeObjectURL(url);
+            },
+            
+            importConfig(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const imported = JSON.parse(e.target.result);
+                            this.config = imported;
+                            this.showAutosaveIndicator();
+                        } catch (err) {
+                            alert('Error al importar: archivo JSON inválido');
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+                event.target.value = '';
+            },
+            
+            // ===== SCHEMA METHODS =====
+            addField() { 
+                this.config.schema_fields.push({
+                    name: "nuevo", 
+                    type: "int", 
+                    min: 0, 
+                    max: 100, 
+                    null_percentage: 0
+                });
+            },
+            
+            removeField(i) { 
+                this.config.schema_fields.splice(i, 1);
+            },
+            
+            // ===== PREVIEW =====
+            generatePreview() {
+                const sample = {};
+                
+                if (this.config.device_count > 1) {
+                    sample.sensor_id = "device_001";
+                }
+                
+                this.config.schema_fields.forEach(field => {
+                    switch(field.type) {
+                        case 'int':
+                            sample[field.name] = Math.floor(Math.random() * ((field.max || 100) - (field.min || 0)) + (field.min || 0));
+                            break;
+                        case 'float':
+                            sample[field.name] = (Math.random() * ((field.max || 100) - (field.min || 0)) + (field.min || 0)).toFixed(2);
+                            break;
+                        case 'name':
+                            sample[field.name] = "John Doe";
+                            break;
+                        case 'email':
+                            sample[field.name] = "user@example.com";
+                            break;
+                        case 'city':
+                            sample[field.name] = "Madrid";
+                            break;
+                        case 'choice':
+                            sample[field.name] = field.options && field.options.length > 0 ? field.options[0] : "Option1";
+                            break;
+                        case 'datetime':
+                            sample[field.name] = new Date().toISOString();
+                            break;
+                        case 'uuid':
+                            sample[field.name] = "550e8400-e29b-41d4-a716-446655440000";
+                            break;
+                        default:
+                            sample[field.name] = "value";
+                    }
+                });
+                
+                return JSON.stringify(sample, null, 2);
+            },
+            
+            // ===== VALIDATION =====
+            validateConfig() {
+                if (this.config.schema_fields.length === 0) {
+                    alert(this.txt.validation.no_fields);
+                    return false;
+                }
+                
+                for (let field of this.config.schema_fields) {
+                    if (!field.name || !field.type) {
+                        alert(this.txt.validation.invalid_config);
+                        return false;
+                    }
+                }
+                
+                return true;
+            },
+            
+            // ===== SIMULATION METHODS =====
             getIcon(type) {
-                const map = { 'file': 'bi-file-earmark-text', 'mqtt': 'bi-router', 'kafka': 'bi-bricks', 'http': 'bi-globe', 'rabbitmq': 'bi-box-seam' };
+                const map = { 
+                    'file': 'bi-file-earmark-text', 
+                    'mqtt': 'bi-router', 
+                    'kafka': 'bi-bricks', 
+                    'http': 'bi-globe', 
+                    'rabbitmq': 'bi-box-seam' 
+                };
                 return map[type] || 'bi-question';
             },
-            statusBadge(s) { return {'running':'bg-primary','completed':'bg-success','stopped':'bg-danger'}[s] || 'bg-secondary'; },
+            
+            statusBadge(s) { 
+                return {
+                    'running': 'bg-primary',
+                    'completed': 'bg-success',
+                    'stopped': 'bg-danger'
+                }[s] || 'bg-secondary'; 
+            },
+            
             async checkStatus() {
                 try {
                     await fetch('/api/simulation/all');
                     this.serverStatus = true;
-                } catch(e) { this.serverStatus = false; }
+                } catch(e) { 
+                    this.serverStatus = false; 
+                }
             },
+            
             async startSimulation() {
+                if (!this.validateConfig()) {
+                    return;
+                }
+                
                 this.loading = true;
                 try {
-                    await fetch('/api/simulation/start', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(this.config) });
+                    await fetch('/api/simulation/start', { 
+                        method: 'POST', 
+                        headers: {'Content-Type': 'application/json'}, 
+                        body: JSON.stringify(this.config) 
+                    });
                     this.pollStatus();
-                } catch(e) { console.error(e); }
+                    this.activeTab = 'sims';
+                } catch(e) { 
+                    console.error(e);
+                    alert('Error al iniciar la simulación');
+                }
                 this.loading = false;
             },
-            async stopSim(id) { await fetch(`/api/simulation/stop/${id}`, {method:'POST'}); },
+            
+            async stopSim(id) { 
+                await fetch(`/api/simulation/stop/${id}`, {method: 'POST'}); 
+            },
+            
             async pollStatus() {
                 try {
                     const r = await fetch('/api/simulation/all');
                     this.simulations = await r.json();
                     this.serverStatus = true;
-                } catch(e) { this.serverStatus = false; }
+                } catch(e) { 
+                    this.serverStatus = false; 
+                }
             },
+            
             async loadFiles() {
                 try {
                     const r = await fetch('/api/files');
                     const d = await r.json();
                     this.files = d.files;
-                } catch(e) { console.error(e); }
+                } catch(e) { 
+                    console.error(e); 
+                }
             }
         }
     }).mount('#app');
