@@ -132,8 +132,18 @@
                 </button>
             </li>
             <li class="nav-item" role="presentation">
+                <button class="nav-link" :class="{active: activeTab==='dashboard'}" @click="activeTab='dashboard'; loadStats()">
+                    <i class="bi bi-bar-chart"></i> {{ txt.tabs.dashboard }}
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
                 <button class="nav-link" :class="{active: activeTab==='files'}" @click="activeTab='files'">
                     <i class="bi bi-file-earmark-text"></i> {{ txt.tabs.files }}
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" :class="{active: activeTab==='history'}" @click="activeTab='history'; loadHistory()">
+                    <i class="bi bi-clock-history"></i> {{ txt.tabs.history }}
                 </button>
             </li>
         </ul>
@@ -156,7 +166,17 @@
                         </div>
                         <div class="d-flex justify-content-between mt-2 align-items-center">
                             <small class="text-muted">{{ sim.current }}/{{ sim.total }}</small>
-                            <button v-if="sim.status=='running'" @click="stopSim(id)" class="btn btn-xs btn-outline-danger py-0" style="font-size: 0.7rem;">{{ txt.buttons.stop }}</button>
+                            <div class="btn-group btn-group-sm">
+                                <button v-if="sim.status=='running'" @click="pauseSim(id)" class="btn btn-xs btn-outline-warning py-0" style="font-size: 0.7rem;" :title="txt.buttons.pause">
+                                    <i class="bi bi-pause-fill"></i>
+                                </button>
+                                <button v-if="sim.status=='paused'" @click="resumeSim(id)" class="btn btn-xs btn-outline-success py-0" style="font-size: 0.7rem;" :title="txt.buttons.resume">
+                                    <i class="bi bi-play-fill"></i>
+                                </button>
+                                <button v-if="sim.status=='running' || sim.status=='paused'" @click="stopSim(id)" class="btn btn-xs btn-outline-danger py-0" style="font-size: 0.7rem;" :title="txt.buttons.stop">
+                                    <i class="bi bi-stop-fill"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -201,17 +221,147 @@
                 </div>
             </div>
 
+            <!-- Dashboard Tab -->
+            <div v-show="activeTab==='dashboard'">
+                <div v-if="!stats" class="text-center text-muted py-3">
+                    <i class="bi bi-bar-chart fs-1"></i><br>{{ txt.dashboard.loading }}
+                </div>
+
+                <div v-else>
+                    <!-- Métricas principales -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <div class="card border-0 shadow-sm bg-primary text-white">
+                                <div class="card-body p-2 text-center">
+                                    <i class="bi bi-play-circle fs-2"></i>
+                                    <h3 class="mb-0 mt-1">{{ stats.total_simulations }}</h3>
+                                    <small>{{ txt.dashboard.total_sims }}</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="card border-0 shadow-sm bg-success text-white">
+                                <div class="card-body p-2 text-center">
+                                    <i class="bi bi-database fs-2"></i>
+                                    <h3 class="mb-0 mt-1">{{ formatNumber(stats.total_records) }}</h3>
+                                    <small>{{ txt.dashboard.total_records }}</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="card border-0 shadow-sm bg-info text-white">
+                                <div class="card-body p-2 text-center">
+                                    <i class="bi bi-clock fs-2"></i>
+                                    <h3 class="mb-0 mt-1">{{ stats.avg_duration }}s</h3>
+                                    <small>{{ txt.dashboard.avg_duration }}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Distribución por Estado -->
+                    <div class="card border-0 shadow-sm mb-3">
+                        <div class="card-header bg-light py-2">
+                            <strong><i class="bi bi-pie-chart"></i> {{ txt.dashboard.by_status }}</strong>
+                        </div>
+                        <div class="card-body p-2">
+                            <div v-for="(count, status) in stats.by_status" :key="status" class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge" :class="statusBadge(status)">{{ status }}</span>
+                                <span class="fw-bold">{{ count }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Distribución por Formato -->
+                    <div class="card border-0 shadow-sm mb-3">
+                        <div class="card-header bg-light py-2">
+                            <strong><i class="bi bi-file-earmark"></i> {{ txt.dashboard.by_format }}</strong>
+                        </div>
+                        <div class="card-body p-2">
+                            <div v-for="(count, format) in stats.by_format" :key="format" class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge bg-secondary">{{ format.toUpperCase() }}</span>
+                                <span class="fw-bold">{{ count }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actividad Reciente -->
+                    <div class="card border-0 shadow-sm mb-3">
+                        <div class="card-header bg-light py-2">
+                            <strong><i class="bi bi-activity"></i> {{ txt.dashboard.recent_activity }}</strong>
+                        </div>
+                        <div class="card-body p-2">
+                            <div v-for="(item, index) in stats.recent_activity" :key="index" class="small mb-2 pb-2 border-bottom">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="text-truncate fw-bold" style="max-width: 150px;">{{ item.name }}</span>
+                                    <span class="badge" :class="statusBadge(item.status)">{{ item.status }}</span>
+                                </div>
+                                <div class="text-muted mt-1">
+                                    <i class="bi bi-database"></i> {{ item.records }} registros
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button @click="loadStats" class="btn btn-sm btn-light w-100">
+                        <i class="bi bi-arrow-clockwise"></i> {{ txt.status.refresh }}
+                    </button>
+                </div>
+            </div>
+
             <!-- Files Tab -->
             <div v-show="activeTab==='files'">
                 <ul class="list-group list-group-flush small">
                     <li v-for="f in files" class="list-group-item bg-transparent d-flex justify-content-between align-items-center px-0">
                         <span class="text-truncate" :title="f" style="max-width: 180px;">{{ f }}</span>
-                        <a :href="'/api/files/download/'+f" class="text-success" :title="txt.buttons.download">
+                        <a :href="'/api/files/download/'+f+'?token='+encodeURIComponent(authToken || '')" class="text-success" :title="txt.buttons.download">
                             <i class="bi bi-cloud-download-fill fs-5"></i>
                         </a>
                     </li>
                 </ul>
                 <button @click="loadFiles" class="btn btn-sm btn-light w-100 mt-2">
+                    <i class="bi bi-arrow-clockwise"></i> {{ txt.status.refresh }}
+                </button>
+            </div>
+
+            <!-- History Tab -->
+            <div v-show="activeTab==='history'">
+                <div v-if="history.length === 0" class="text-center text-muted py-3">
+                    <i class="bi bi-clock-history fs-1"></i><br>{{ txt.history.empty }}
+                </div>
+
+                <div v-for="item in history" :key="item.sim_id" class="card mb-2 border-0 shadow-sm">
+                    <div class="card-body p-2 small">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div class="flex-grow-1">
+                                <strong class="d-block text-truncate" style="max-width: 200px;">{{ item.name }}</strong>
+                                <small class="text-muted">{{ item.sim_id.substring(0, 8) }}...</small>
+                            </div>
+                            <span class="badge" :class="statusBadge(item.status)">{{ item.status }}</span>
+                        </div>
+
+                        <div class="row g-1 small">
+                            <div class="col-6">
+                                <i class="bi bi-database"></i> {{ item.completed_records }}/{{ item.total_records }} {{ txt.history.records }}
+                            </div>
+                            <div class="col-6">
+                                <i class="bi bi-clock"></i> {{ item.duration_seconds }}s
+                            </div>
+                            <div class="col-6">
+                                <i class="bi bi-file-earmark"></i> {{ item.file_format.toUpperCase() }}
+                            </div>
+                            <div class="col-6">
+                                <i class="bi bi-list-ul"></i> {{ item.schema_field_count }} {{ txt.history.fields }}
+                            </div>
+                        </div>
+
+                        <div class="mt-2 text-muted" style="font-size: 0.7rem;">
+                            <i class="bi bi-calendar"></i> {{ formatDate(item.end_time) }}
+                        </div>
+                    </div>
+                </div>
+
+                <button @click="loadHistory" class="btn btn-sm btn-light w-100 mt-2">
                     <i class="bi bi-arrow-clockwise"></i> {{ txt.status.refresh }}
                 </button>
             </div>
@@ -224,6 +374,17 @@
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="text-gray-800">{{ txt.designer_title }}</h2>
                 <div class="d-flex gap-2">
+                    <button v-if="!currentUser" class="btn btn-dark" @click="openAuth('login')">
+                        <i class="bi bi-person-lock"></i> {{ txt.auth.access }}
+                    </button>
+                    <div v-if="currentUser" class="btn btn-light border d-flex align-items-center gap-2">
+                        <i class="bi bi-person-circle"></i>
+                        <strong>{{ currentUser }}</strong>
+                        <button class="btn btn-sm btn-outline-danger" @click="logout">{{ txt.auth.logout }}</button>
+                    </div>
+                    <button class="btn btn-outline-primary" @click="showAIAssistant = true">
+                        <i class="bi bi-stars"></i> {{ txt.buttons.ai_assistant }}
+                    </button>
                     <button class="btn btn-outline-info" @click="showPreview = true">
                         <i class="bi bi-eye"></i> {{ txt.buttons.preview }}
                     </button>
@@ -236,6 +397,11 @@
                         <span v-else><i class="bi bi-rocket-takeoff-fill"></i> {{ txt.buttons.launch }}</span>
                     </button>
                 </div>
+            </div>
+
+            <div v-if="!currentUser" class="alert alert-warning d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-shield-lock me-2"></i>{{ txt.auth.mandatory }}</span>
+                <button class="btn btn-sm btn-dark" @click="openAuth('login')">{{ txt.auth.access }}</button>
             </div>
 
             <div class="row">
@@ -272,7 +438,7 @@
                         <div class="card-header">{{ txt.sink.header }}</div>
                         <div class="card-body">
                             <div class="row g-2 mb-3">
-                                <div class="col-4" v-for="type in ['file', 'mqtt', 'kafka', 'http', 'rabbitmq']">
+                                <div class="col-4" v-for="type in ['file', 'mqtt', 'kafka', 'http', 'rabbitmq', 'postgres', 'mongodb', 'mysql']">
                                     <div class="sink-option" :class="{active: config.target_type === type}" @click="config.target_type = type">
                                         <i class="bi" :class="getIcon(type)"></i>
                                         <span class="text-uppercase small fw-bold">{{ type }}</span>
@@ -286,7 +452,8 @@
                                     <option value="json">JSON (Array)</option>
                                     <option value="csv">CSV (Excel)</option>
                                     <option value="xml">XML</option>
-                                    <option value="toml">TOML / TOON</option>
+                                    <option value="toml">TOML (Standard)</option>
+                                    <option value="toon">TOON (Streaming Blocks)</option>
                                 </select>
                             </div>
 
@@ -306,6 +473,31 @@
                             <div v-if="config.target_type === 'rabbitmq'" class="bg-light p-3 rounded fade-in">
                                 <input v-model="config.rabbitmq_host" :placeholder="txt.sink.ph_host" class="form-control mb-2">
                                 <input v-model="config.rabbitmq_queue" :placeholder="txt.sink.ph_queue" class="form-control">
+                            </div>
+                            <div v-if="config.target_type === 'postgres'" class="bg-light p-3 rounded fade-in">
+                                <input v-model="config.postgres_host" :placeholder="txt.sink.ph_pg_host" class="form-control mb-2">
+                                <div class="row g-2 mb-2">
+                                    <div class="col-4"><input v-model.number="config.postgres_port" :placeholder="txt.sink.ph_port" class="form-control"></div>
+                                    <div class="col-8"><input v-model="config.postgres_db" :placeholder="txt.sink.ph_pg_db" class="form-control"></div>
+                                </div>
+                                <input v-model="config.postgres_user" :placeholder="txt.sink.ph_pg_user" class="form-control mb-2">
+                                <input v-model="config.postgres_password" :placeholder="txt.sink.ph_pg_password" type="password" class="form-control mb-2">
+                                <input v-model="config.postgres_table" :placeholder="txt.sink.ph_pg_table" class="form-control">
+                            </div>
+                            <div v-if="config.target_type === 'mongodb'" class="bg-light p-3 rounded fade-in">
+                                <input v-model="config.mongodb_uri" :placeholder="txt.sink.ph_mongo_uri" class="form-control mb-2">
+                                <input v-model="config.mongodb_db" :placeholder="txt.sink.ph_mongo_db" class="form-control mb-2">
+                                <input v-model="config.mongodb_collection" :placeholder="txt.sink.ph_mongo_collection" class="form-control">
+                            </div>
+                            <div v-if="config.target_type === 'mysql'" class="bg-light p-3 rounded fade-in">
+                                <input v-model="config.mysql_host" :placeholder="txt.sink.ph_mysql_host" class="form-control mb-2">
+                                <div class="row g-2 mb-2">
+                                    <div class="col-4"><input v-model.number="config.mysql_port" :placeholder="txt.sink.ph_port" class="form-control"></div>
+                                    <div class="col-8"><input v-model="config.mysql_db" :placeholder="txt.sink.ph_mysql_db" class="form-control"></div>
+                                </div>
+                                <input v-model="config.mysql_user" :placeholder="txt.sink.ph_mysql_user" class="form-control mb-2">
+                                <input v-model="config.mysql_password" :placeholder="txt.sink.ph_mysql_password" type="password" class="form-control mb-2">
+                                <input v-model="config.mysql_table" :placeholder="txt.sink.ph_mysql_table" class="form-control">
                             </div>
                         </div>
                     </div>
@@ -332,9 +524,21 @@
                                     <option value="name">{{ txt.types.name }}</option>
                                     <option value="email">{{ txt.types.email }}</option>
                                     <option value="city">{{ txt.types.city }}</option>
+                                    <option value="country">{{ txt.types.country }}</option>
+                                    <option value="phone">{{ txt.types.phone }}</option>
+                                    <option value="address">{{ txt.types.address }}</option>
+                                    <option value="company">{{ txt.types.company }}</option>
+                                    <option value="job">{{ txt.types.job }}</option>
+                                    <option value="ip_address">{{ txt.types.ip_address }}</option>
+                                    <option value="latitude">{{ txt.types.latitude }}</option>
+                                    <option value="longitude">{{ txt.types.longitude }}</option>
+                                    <option value="credit_card">{{ txt.types.credit_card }}</option>
+                                    <option value="iban">{{ txt.types.iban }}</option>
+                                    <option value="url">{{ txt.types.url }}</option>
                                     <option value="choice">{{ txt.types.choice }}</option>
                                     <option value="datetime">{{ txt.types.datetime }}</option>
                                     <option value="uuid">{{ txt.types.uuid }}</option>
+                                    <option value="timeseries">{{ txt.types.timeseries }}</option>
                                 </select>
 
                                 <div v-if="['int','float'].includes(field.type)" class="d-flex gap-1">
@@ -342,7 +546,29 @@
                                     <input v-model.number="field.max" :placeholder="txt.schema.ph_max" class="form-control form-control-sm" style="width: 60px">
                                 </div>
                                 <div v-if="field.type === 'choice'" class="flex-grow-1">
-                                    <input :value="field.options ? field.options.join(',') : ''" @input="field.options = $event.target.value.split(',').map(s=>s.trim())" :placeholder="txt.schema.ph_opts" class="form-control form-control-sm">
+                                    <input :value="field.options ? field.options.join(',') : ''" @input="field.options = $event.target.value.split(',').map(s=>s.trim())" :placeholder="txt.schema.ph_opts" class="form-control form-control-sm mb-1">
+                                    <input :value="field.weights ? field.weights.join(',') : ''" @input="field.weights = $event.target.value.split(',').map(s=>parseFloat(s.trim())).filter(n=>!isNaN(n))" :placeholder="txt.schema.ph_weights" class="form-control form-control-sm" style="font-size: 0.75rem;">
+                                </div>
+                                <div v-if="field.type === 'timeseries'" class="flex-grow-1">
+                                    <div class="row g-1 mb-1">
+                                        <div class="col-6">
+                                            <input v-model.number="field.base_value" :placeholder="txt.schema.ph_base" class="form-control form-control-sm" style="font-size: 0.75rem;">
+                                        </div>
+                                        <div class="col-6">
+                                            <input v-model.number="field.trend_slope" :placeholder="txt.schema.ph_trend" class="form-control form-control-sm" style="font-size: 0.75rem;">
+                                        </div>
+                                    </div>
+                                    <div class="row g-1">
+                                        <div class="col-4">
+                                            <input v-model.number="field.seasonal_amplitude" :placeholder="txt.schema.ph_amplitude" class="form-control form-control-sm" style="font-size: 0.75rem;">
+                                        </div>
+                                        <div class="col-4">
+                                            <input v-model.number="field.seasonal_period" :placeholder="txt.schema.ph_period" class="form-control form-control-sm" style="font-size: 0.75rem;">
+                                        </div>
+                                        <div class="col-4">
+                                            <input v-model.number="field.noise_level" :placeholder="txt.schema.ph_noise" class="form-control form-control-sm" style="font-size: 0.75rem;">
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div class="ms-auto d-flex align-items-center gap-2">
@@ -396,7 +622,77 @@
         </div>
     </div>
 
-    <div v-if="showSaveTemplateModal || showPreview" class="modal-backdrop fade show"></div>
+    <!-- AI Assistant Modal -->
+    <div class="modal fade" :class="{show: showAIAssistant, 'd-block': showAIAssistant}" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="bi bi-stars"></i> {{ txt.ai.title }}</h5>
+                    <button type="button" class="btn-close btn-close-white" @click="showAIAssistant = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> {{ txt.ai.info }}
+                    </div>
+                    <label class="form-label fw-bold">{{ txt.ai.description_label }}</label>
+                    <textarea
+                        v-model="aiDescription"
+                        class="form-control mb-3"
+                        rows="4"
+                        :placeholder="txt.ai.description_placeholder"
+                        :disabled="aiLoading"
+                    ></textarea>
+                    <div class="d-flex gap-2 justify-content-end">
+                        <button type="button" class="btn btn-secondary" @click="showAIAssistant = false" :disabled="aiLoading">
+                            {{ txt.buttons.cancel }}
+                        </button>
+                        <button type="button" class="btn btn-primary" @click="generateWithAI" :disabled="!aiDescription.trim() || aiLoading">
+                            <span v-if="aiLoading" class="spinner-border spinner-border-sm me-2"></span>
+                            <i v-else class="bi bi-magic me-2"></i>
+                            {{ aiLoading ? txt.ai.generating : txt.ai.generate_btn }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div class="modal fade" :class="{show: showAuthModal, 'd-block': showAuthModal}" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-shield-lock"></i>
+                        {{ authMode === 'login' ? txt.auth.login_title : txt.auth.register_title }}
+                    </h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" @click="authMode = authMode === 'login' ? 'register' : 'login'">
+                            {{ authMode === 'login' ? txt.auth.go_register : txt.auth.go_login }}
+                        </button>
+                        <button v-if="currentUser" type="button" class="btn-close" @click="showAuthModal=false"></button>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2">
+                        {{ txt.auth.helper }}
+                    </div>
+                    <label class="form-label">{{ txt.auth.username }}</label>
+                    <input v-model="authForm.username" type="text" class="form-control mb-3">
+                    <label class="form-label">{{ txt.auth.password }}</label>
+                    <input v-model="authForm.password" type="password" class="form-control">
+                </div>
+                <div class="modal-footer">
+                    <button v-if="currentUser" class="btn btn-secondary" @click="showAuthModal=false">{{ txt.buttons.cancel }}</button>
+                    <button class="btn btn-primary" @click="submitAuth">
+                        {{ authMode === 'login' ? txt.auth.login : txt.auth.register }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="showSaveTemplateModal || showPreview || showAIAssistant || showAuthModal" class="modal-backdrop fade show"></div>
 </div>
 
 <script>
@@ -418,12 +714,16 @@
             tabs: {
                 simulations: "Activas",
                 templates: "Plantillas",
-                files: "Archivos"
+                dashboard: "Dashboard",
+                files: "Archivos",
+                history: "Histórico"
             },
             buttons: {
                 clean: "Limpiar",
                 launch: "LANZAR AHORA",
                 stop: "PARAR",
+                pause: "Pausar",
+                resume: "Reanudar",
                 add_field: "+ Campo",
                 download: "Descargar",
                 save_template: "Guardar Plantilla",
@@ -434,7 +734,8 @@
                 preview: "Vista Previa",
                 cancel: "Cancelar",
                 save: "Guardar",
-                close: "Cerrar"
+                close: "Cerrar",
+                ai_assistant: "Asistente IA"
             },
             config: {
                 header: "1. Configuración Global",
@@ -452,7 +753,20 @@
                 ph_topic: "Topic / Tema",
                 ph_url: "https://mi-api.com/webhook",
                 ph_bootstrap: "Bootstrap Servers",
-                ph_queue: "Nombre Cola"
+                ph_queue: "Nombre Cola",
+                ph_pg_host: "PostgreSQL Host (ej: localhost)",
+                ph_pg_db: "Base de datos PostgreSQL",
+                ph_pg_user: "Usuario PostgreSQL",
+                ph_pg_password: "Password PostgreSQL",
+                ph_pg_table: "Tabla (ej: synthetic_data)",
+                ph_mongo_uri: "MongoDB URI (ej: mongodb://localhost:27017)",
+                ph_mongo_db: "Base de datos MongoDB",
+                ph_mongo_collection: "Colección (ej: synthetic_data)",
+                ph_mysql_host: "MySQL Host (ej: localhost)",
+                ph_mysql_db: "Base de datos MySQL",
+                ph_mysql_user: "Usuario MySQL",
+                ph_mysql_password: "Password MySQL",
+                ph_mysql_table: "Tabla (ej: synthetic_data)"
             },
             schema: {
                 header: "3. Modelo de Datos",
@@ -461,7 +775,13 @@
                 ph_name: "Nombre Campo",
                 ph_min: "Min",
                 ph_max: "Max",
-                ph_opts: "Op1, Op2, Op3"
+                ph_opts: "Op1, Op2, Op3",
+                ph_weights: "Pesos: 0.7, 0.2, 0.1 (opcional)",
+                ph_base: "Base: 50",
+                ph_trend: "Tendencia: 0.5",
+                ph_amplitude: "Amplitud: 10",
+                ph_period: "Período: 20",
+                ph_noise: "Ruido: 2"
             },
             types: {
                 int: "Entero",
@@ -469,9 +789,21 @@
                 name: "Nombre Persona",
                 email: "Email",
                 city: "Ciudad",
+                country: "País",
+                phone: "Teléfono",
+                address: "Dirección",
+                company: "Empresa",
+                job: "Profesión",
+                ip_address: "IP Address",
+                latitude: "Latitud",
+                longitude: "Longitud",
+                credit_card: "Tarjeta Crédito",
+                iban: "IBAN",
+                url: "URL",
                 choice: "Lista Opciones",
                 datetime: "Fecha/Hora",
-                uuid: "UUID"
+                uuid: "UUID",
+                timeseries: "Serie Temporal"
             },
             templates: {
                 empty: "Sin plantillas guardadas",
@@ -481,12 +813,56 @@
                 records: "registros",
                 fields: "campos"
             },
+            history: {
+                empty: "No hay simulaciones en el histórico",
+                records: "registros",
+                fields: "campos"
+            },
+            dashboard: {
+                loading: "Cargando estadísticas...",
+                total_sims: "Simulaciones",
+                total_records: "Registros Generados",
+                avg_duration: "Duración Promedio",
+                by_status: "Por Estado",
+                by_format: "Por Formato",
+                recent_activity: "Actividad Reciente"
+            },
             preview: {
                 title: "Vista Previa del JSON"
             },
+            ai: {
+                title: "Asistente IA - Generador de Esquemas",
+                info: "Describe qué tipo de datos quieres simular y la IA generará automáticamente el esquema y sugerirá el sink más adecuado.",
+                description_label: "Descripción de los datos",
+                description_placeholder: "Ej: Sensores IoT de temperatura, humedad y presión atmosférica en una planta industrial",
+                generate_btn: "Generar Esquema",
+                generating: "Generando...",
+                error: "Error al generar esquema",
+                success: "¡Esquema generado con éxito!"
+            },
             validation: {
                 no_fields: "Debes añadir al menos un campo al esquema",
-                invalid_config: "Configuración inválida. Revisa los campos."
+                invalid_config: "Configuración inválida. Revisa los campos.",
+                missing_sink: "Faltan datos obligatorios del sink seleccionado."
+            },
+            auth: {
+                access: "Acceder",
+                login: "Login",
+                register: "Registro",
+                logout: "Salir",
+                login_title: "Iniciar sesión",
+                register_title: "Crear cuenta",
+                go_register: "Crear cuenta",
+                go_login: "Ya tengo cuenta",
+                username: "Usuario",
+                password: "Contraseña",
+                mandatory: "Para usar SynthDataFactory necesitas iniciar sesión o crear una cuenta.",
+                helper: "Puedes iniciar sesión si ya tienes cuenta o crear una nueva en un solo paso.",
+                login_required: "Debes iniciar sesión para lanzar simulaciones",
+                required: "Usuario y contraseña son obligatorios",
+                success_login: "Sesión iniciada",
+                success_register: "Cuenta creada",
+                error: "Error de autenticación"
             }
         },
         en: {
@@ -505,12 +881,16 @@
             tabs: {
                 simulations: "Active",
                 templates: "Templates",
-                files: "Files"
+                dashboard: "Dashboard",
+                files: "Files",
+                history: "History"
             },
             buttons: {
                 clean: "Reset",
                 launch: "LAUNCH NOW",
                 stop: "STOP",
+                pause: "Pause",
+                resume: "Resume",
                 add_field: "+ Field",
                 download: "Download",
                 save_template: "Save Template",
@@ -521,7 +901,8 @@
                 preview: "Preview",
                 cancel: "Cancel",
                 save: "Save",
-                close: "Close"
+                close: "Close",
+                ai_assistant: "AI Assistant"
             },
             config: {
                 header: "1. Global Config",
@@ -539,7 +920,20 @@
                 ph_topic: "Topic",
                 ph_url: "https://my-api.com/webhook",
                 ph_bootstrap: "Bootstrap Servers",
-                ph_queue: "Queue Name"
+                ph_queue: "Queue Name",
+                ph_pg_host: "PostgreSQL Host (e.g., localhost)",
+                ph_pg_db: "PostgreSQL Database",
+                ph_pg_user: "PostgreSQL User",
+                ph_pg_password: "PostgreSQL Password",
+                ph_pg_table: "Table (e.g., synthetic_data)",
+                ph_mongo_uri: "MongoDB URI (e.g., mongodb://localhost:27017)",
+                ph_mongo_db: "MongoDB Database",
+                ph_mongo_collection: "Collection (e.g., synthetic_data)",
+                ph_mysql_host: "MySQL Host (e.g., localhost)",
+                ph_mysql_db: "MySQL Database",
+                ph_mysql_user: "MySQL User",
+                ph_mysql_password: "MySQL Password",
+                ph_mysql_table: "Table (e.g., synthetic_data)"
             },
             schema: {
                 header: "3. Data Model",
@@ -548,7 +942,13 @@
                 ph_name: "Field Name",
                 ph_min: "Min",
                 ph_max: "Max",
-                ph_opts: "Op1, Op2, Op3"
+                ph_opts: "Op1, Op2, Op3",
+                ph_weights: "Weights: 0.7, 0.2, 0.1 (optional)",
+                ph_base: "Base: 50",
+                ph_trend: "Trend: 0.5",
+                ph_amplitude: "Amplitude: 10",
+                ph_period: "Period: 20",
+                ph_noise: "Noise: 2"
             },
             types: {
                 int: "Integer",
@@ -556,9 +956,21 @@
                 name: "Person Name",
                 email: "Email",
                 city: "City",
+                country: "Country",
+                phone: "Phone Number",
+                address: "Address",
+                company: "Company",
+                job: "Job Title",
+                ip_address: "IP Address",
+                latitude: "Latitude",
+                longitude: "Longitude",
+                credit_card: "Credit Card",
+                iban: "IBAN",
+                url: "URL",
                 choice: "Choice List",
                 datetime: "Timestamp",
-                uuid: "UUID"
+                uuid: "UUID",
+                timeseries: "Time Series"
             },
             templates: {
                 empty: "No saved templates",
@@ -568,12 +980,56 @@
                 records: "records",
                 fields: "fields"
             },
+            history: {
+                empty: "No simulations in history",
+                records: "records",
+                fields: "fields"
+            },
+            dashboard: {
+                loading: "Loading statistics...",
+                total_sims: "Simulations",
+                total_records: "Generated Records",
+                avg_duration: "Average Duration",
+                by_status: "By Status",
+                by_format: "By Format",
+                recent_activity: "Recent Activity"
+            },
             preview: {
                 title: "JSON Preview"
             },
+            ai: {
+                title: "AI Assistant - Schema Generator",
+                info: "Describe what data you want to simulate and AI will generate the schema and suggest the best sink.",
+                description_label: "Data Description",
+                description_placeholder: "e.g., IoT sensors for temperature, humidity, and atmospheric pressure in an industrial plant",
+                generate_btn: "Generate Schema",
+                generating: "Generating...",
+                error: "Error generating schema",
+                success: "Schema generated successfully!"
+            },
             validation: {
                 no_fields: "You must add at least one field to the schema",
-                invalid_config: "Invalid configuration. Check the fields."
+                invalid_config: "Invalid configuration. Check the fields.",
+                missing_sink: "Missing required fields for the selected sink."
+            },
+            auth: {
+                access: "Access",
+                login: "Login",
+                register: "Register",
+                logout: "Logout",
+                login_title: "Sign in",
+                register_title: "Create account",
+                go_register: "Create account",
+                go_login: "I already have one",
+                username: "Username",
+                password: "Password",
+                mandatory: "You must sign in or create an account to use SynthDataFactory.",
+                helper: "Use login if you already have an account, or register a new one.",
+                login_required: "You must be logged in to launch simulations",
+                required: "Username and password are required",
+                success_login: "Logged in",
+                success_register: "Account created",
+                error: "Authentication error"
             }
         }
     };
@@ -587,11 +1043,21 @@
                 loading: false,
                 simulations: {},
                 files: [],
+                history: [],
+                stats: null,
                 activeTab: 'sims',
                 templates: [],
                 showSaveTemplateModal: false,
                 showPreview: false,
+                showAIAssistant: false,
+                showAuthModal: false,
+                authMode: 'login',
+                authToken: '',
+                currentUser: '',
+                authForm: { username: '', password: '' },
                 newTemplateName: '',
+                aiDescription: '',
+                aiLoading: false,
                 showAutosave: false,
                 autosaveTimeout: null,
                 config: {
@@ -608,7 +1074,10 @@
                     mqtt_host: "test.mosquitto.org", mqtt_port: 1883, mqtt_topic: "sensor/data",
                     http_url: "",
                     kafka_bootstrap: "localhost:9092", kafka_topic: "my-topic",
-                    rabbitmq_host: "localhost", rabbitmq_queue: "my_queue"
+                    rabbitmq_host: "localhost", rabbitmq_queue: "my_queue",
+                    postgres_host: "localhost", postgres_port: 5432, postgres_db: "synthdata", postgres_user: "postgres", postgres_password: "", postgres_table: "synthetic_data",
+                    mongodb_uri: "mongodb://localhost:27017", mongodb_db: "synthdata", mongodb_collection: "synthetic_data",
+                    mysql_host: "localhost", mysql_port: 3306, mysql_db: "synthdata", mysql_user: "root", mysql_password: "", mysql_table: "synthetic_data"
                 }
             }
         },
@@ -627,12 +1096,104 @@
         },
         async mounted() {
             await this.loadFromStorage();
+            await this.initializeAuth();
             await this.loadTemplates();
             this.checkStatus();
             setInterval(this.pollStatus, 2000);
             this.loadFiles();
+            setInterval(this.loadFiles, 3000); // Auto-refresh files every 3 seconds
         },
         methods: {
+            async apiFetch(url, options = {}) {
+                const headers = options.headers ? {...options.headers} : {};
+                if (this.authToken) {
+                    headers['Authorization'] = `Bearer ${this.authToken}`;
+                }
+                const response = await fetch(url, {...options, headers});
+                if (response.status === 401) {
+                    this.currentUser = '';
+                    this.authToken = '';
+                    await this.storageDelete('auth_token');
+                    await this.storageDelete('auth_user');
+                }
+                return response;
+            },
+
+            openAuth(mode) {
+                this.authMode = mode;
+                this.authForm = { username: '', password: '' };
+                this.showAuthModal = true;
+            },
+
+            async initializeAuth() {
+                this.authToken = (await this.storageGet('auth_token')) || '';
+                this.currentUser = (await this.storageGet('auth_user')) || '';
+                if (!this.authToken) {
+                    this.openAuth('login');
+                    return;
+                }
+                try {
+                    const r = await this.apiFetch('/api/auth/me');
+                    if (!r.ok) {
+                        this.authToken = '';
+                        this.currentUser = '';
+                        this.openAuth('login');
+                    } else {
+                        const d = await r.json();
+                        this.currentUser = d.username;
+                    }
+                } catch (e) {
+                    console.error(e);
+                    this.openAuth('login');
+                }
+            },
+
+            async submitAuth() {
+                if (!this.authForm.username.trim() || !this.authForm.password.trim()) {
+                    alert(this.txt.auth.required);
+                    return;
+                }
+                const endpoint = this.authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
+                try {
+                    const r = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(this.authForm)
+                    });
+                    const d = await r.json();
+                    if (!r.ok) {
+                        throw new Error(d.detail || this.txt.auth.error);
+                    }
+                    this.authToken = d.token;
+                    this.currentUser = d.username;
+                    await this.storageSet('auth_token', d.token);
+                    await this.storageSet('auth_user', d.username);
+                    this.showAuthModal = false;
+                    alert(this.authMode === 'login' ? this.txt.auth.success_login : this.txt.auth.success_register);
+                    this.pollStatus();
+                    this.loadFiles();
+                } catch (e) {
+                    alert(`${this.txt.auth.error}: ${e.message}`);
+                }
+            },
+
+            async logout() {
+                try {
+                    await this.apiFetch('/api/auth/logout', {method: 'POST'});
+                } catch (e) {
+                    console.error(e);
+                }
+                this.authToken = '';
+                this.currentUser = '';
+                this.simulations = {};
+                this.files = [];
+                this.history = [];
+                this.stats = null;
+                await this.storageDelete('auth_token');
+                await this.storageDelete('auth_user');
+                this.openAuth('login');
+            },
+
             toggleLang() {
                 this.lang = this.lang === 'es' ? 'en' : 'es';
                 this.saveToStorage();
@@ -868,11 +1429,11 @@
             // ===== PREVIEW =====
             generatePreview() {
                 const sample = {};
-                
+
                 if (this.config.device_count > 1) {
                     sample.sensor_id = "device_001";
                 }
-                
+
                 this.config.schema_fields.forEach(field => {
                     switch(field.type) {
                         case 'int':
@@ -890,6 +1451,39 @@
                         case 'city':
                             sample[field.name] = "Madrid";
                             break;
+                        case 'country':
+                            sample[field.name] = "España";
+                            break;
+                        case 'phone':
+                            sample[field.name] = "+34 912 345 678";
+                            break;
+                        case 'address':
+                            sample[field.name] = "Calle Mayor 123, 28013 Madrid";
+                            break;
+                        case 'company':
+                            sample[field.name] = "Tech Solutions S.L.";
+                            break;
+                        case 'job':
+                            sample[field.name] = "Software Engineer";
+                            break;
+                        case 'ip_address':
+                            sample[field.name] = "192.168.1.100";
+                            break;
+                        case 'latitude':
+                            sample[field.name] = 40.416775;
+                            break;
+                        case 'longitude':
+                            sample[field.name] = -3.703790;
+                            break;
+                        case 'credit_card':
+                            sample[field.name] = "4532-1234-5678-9010";
+                            break;
+                        case 'iban':
+                            sample[field.name] = "ES9121000418450200051332";
+                            break;
+                        case 'url':
+                            sample[field.name] = "https://example.com";
+                            break;
                         case 'choice':
                             sample[field.name] = field.options && field.options.length > 0 ? field.options[0] : "Option1";
                             break;
@@ -899,16 +1493,37 @@
                         case 'uuid':
                             sample[field.name] = "550e8400-e29b-41d4-a716-446655440000";
                             break;
+                        case 'timeseries':
+                            const base = field.base_value || 50;
+                            const trend = field.trend_slope || 0;
+                            const amplitude = field.seasonal_amplitude || 0;
+                            const period = field.seasonal_period || 10;
+                            const noise = field.noise_level || 0;
+                            const step = 0; // Preview always shows step 0
+                            const trendComp = trend * step;
+                            const seasonalComp = period > 0 ? amplitude * Math.sin(2 * Math.PI * step / period) : 0;
+                            const noiseComp = noise > 0 ? (Math.random() * 2 - 1) * noise : 0;
+                            sample[field.name] = parseFloat((base + trendComp + seasonalComp + noiseComp).toFixed(2));
+                            break;
                         default:
                             sample[field.name] = "value";
                     }
                 });
-                
+
+                // Add automatic _timestamp field (always included in generated data)
+                sample._timestamp = new Date().toISOString();
+
                 return JSON.stringify(sample, null, 2);
             },
             
             // ===== VALIDATION =====
             validateConfig() {
+                if (!this.currentUser || !this.authToken) {
+                    alert(this.txt.auth.login_required);
+                    this.openAuth('login');
+                    return false;
+                }
+
                 if (this.config.schema_fields.length === 0) {
                     alert(this.txt.validation.no_fields);
                     return false;
@@ -917,6 +1532,25 @@
                 for (let field of this.config.schema_fields) {
                     if (!field.name || !field.type) {
                         alert(this.txt.validation.invalid_config);
+                        return false;
+                    }
+                }
+
+                const requiredBySink = {
+                    mqtt: ['mqtt_host', 'mqtt_topic'],
+                    kafka: ['kafka_bootstrap', 'kafka_topic'],
+                    http: ['http_url'],
+                    rabbitmq: ['rabbitmq_host', 'rabbitmq_queue'],
+                    postgres: ['postgres_host', 'postgres_db', 'postgres_user', 'postgres_table'],
+                    mongodb: ['mongodb_uri', 'mongodb_db', 'mongodb_collection'],
+                    mysql: ['mysql_host', 'mysql_db', 'mysql_user', 'mysql_table']
+                };
+
+                const required = requiredBySink[this.config.target_type] || [];
+                for (let key of required) {
+                    const value = this.config[key];
+                    if (value === null || value === undefined || String(value).trim() === '') {
+                        alert(this.txt.validation.missing_sink);
                         return false;
                     }
                 }
@@ -931,22 +1565,27 @@
                     'mqtt': 'bi-router', 
                     'kafka': 'bi-bricks', 
                     'http': 'bi-globe', 
-                    'rabbitmq': 'bi-box-seam' 
+                    'rabbitmq': 'bi-box-seam',
+                    'postgres': 'bi-database',
+                    'mongodb': 'bi-hdd',
+                    'mysql': 'bi-server'
                 };
                 return map[type] || 'bi-question';
             },
             
-            statusBadge(s) { 
+            statusBadge(s) {
                 return {
                     'running': 'bg-primary',
                     'completed': 'bg-success',
-                    'stopped': 'bg-danger'
-                }[s] || 'bg-secondary'; 
+                    'stopped': 'bg-danger',
+                    'paused': 'bg-warning',
+                    'error': 'bg-danger'
+                }[s] || 'bg-secondary';
             },
             
             async checkStatus() {
                 try {
-                    await fetch('/api/simulation/all');
+                    await this.apiFetch('/api/simulation/all');
                     this.serverStatus = true;
                 } catch(e) { 
                     this.serverStatus = false; 
@@ -960,11 +1599,15 @@
                 
                 this.loading = true;
                 try {
-                    await fetch('/api/simulation/start', { 
+                    const response = await this.apiFetch('/api/simulation/start', { 
                         method: 'POST', 
                         headers: {'Content-Type': 'application/json'}, 
                         body: JSON.stringify(this.config) 
                     });
+                    if (!response.ok) {
+                        const d = await response.json();
+                        throw new Error(d.detail || 'Error');
+                    }
                     this.pollStatus();
                     this.activeTab = 'sims';
                 } catch(e) { 
@@ -974,13 +1617,30 @@
                 this.loading = false;
             },
             
-            async stopSim(id) { 
-                await fetch(`/api/simulation/stop/${id}`, {method: 'POST'}); 
+            async stopSim(id) {
+                await this.apiFetch(`/api/simulation/stop/${id}`, {method: 'POST'});
             },
-            
+
+            async pauseSim(id) {
+                try {
+                    await this.apiFetch(`/api/simulation/pause/${id}`, {method: 'POST'});
+                } catch(e) {
+                    console.error(e);
+                }
+            },
+
+            async resumeSim(id) {
+                try {
+                    await this.apiFetch(`/api/simulation/resume/${id}`, {method: 'POST'});
+                } catch(e) {
+                    console.error(e);
+                }
+            },
+
             async pollStatus() {
                 try {
-                    const r = await fetch('/api/simulation/all');
+                    const r = await this.apiFetch('/api/simulation/all');
+                    if (!r.ok) return;
                     this.simulations = await r.json();
                     this.serverStatus = true;
                 } catch(e) { 
@@ -990,11 +1650,103 @@
             
             async loadFiles() {
                 try {
-                    const r = await fetch('/api/files');
+                    const r = await this.apiFetch('/api/files');
+                    if (!r.ok) return;
                     const d = await r.json();
                     this.files = d.files;
-                } catch(e) { 
-                    console.error(e); 
+                } catch(e) {
+                    console.error(e);
+                }
+            },
+
+            async loadHistory() {
+                try {
+                    const r = await this.apiFetch('/api/simulation/history');
+                    if (!r.ok) return;
+                    const d = await r.json();
+                    this.history = d.history || [];
+                } catch(e) {
+                    console.error(e);
+                }
+            },
+
+            formatDate(isoString) {
+                if (!isoString) return '-';
+                const date = new Date(isoString);
+                return date.toLocaleString(this.lang === 'es' ? 'es-ES' : 'en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            },
+
+            async loadStats() {
+                try {
+                    const r = await this.apiFetch('/api/simulation/stats');
+                    if (!r.ok) return;
+                    const d = await r.json();
+                    this.stats = d;
+                } catch(e) {
+                    console.error(e);
+                }
+            },
+
+            formatNumber(num) {
+                if (num >= 1000000) {
+                    return (num / 1000000).toFixed(1) + 'M';
+                } else if (num >= 1000) {
+                    return (num / 1000).toFixed(1) + 'K';
+                }
+                return num.toString();
+            },
+
+            // ===== AI ASSISTANT =====
+            async generateWithAI() {
+                if (!this.aiDescription.trim()) {
+                    return;
+                }
+
+                this.aiLoading = true;
+                try {
+                    const response = await this.apiFetch('/api/ai/generate-schema', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ description: this.aiDescription })
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.detail || 'Error generating schema');
+                    }
+
+                    const data = await response.json();
+
+                    // Update configuration with AI-generated schema
+                    this.config.schema_fields = data.schema_fields;
+                    this.config.simulation_name = data.simulation_name;
+                    this.config.total_records = data.suggested_records;
+                    if (data.suggested_target_type) {
+                        this.config.target_type = data.suggested_target_type;
+                    }
+                    if (data.suggested_sink_config && typeof data.suggested_sink_config === 'object') {
+                        Object.assign(this.config, data.suggested_sink_config);
+                    }
+
+                    // Close modal and show success
+                    this.showAIAssistant = false;
+                    this.aiDescription = '';
+                    this.showAutosaveIndicator();
+
+                    // Show a success notification
+                    alert(this.txt.ai.success);
+
+                } catch (error) {
+                    console.error('Error generating schema:', error);
+                    alert(this.txt.ai.error + ': ' + error.message);
+                } finally {
+                    this.aiLoading = false;
                 }
             }
         }
@@ -1002,3 +1754,4 @@
 </script>
 </body>
 </html>
+

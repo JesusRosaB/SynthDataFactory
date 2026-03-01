@@ -11,3 +11,7 @@ pika
 requests
 toml
 dict2xml
+groq
+psycopg2-binary
+pymongo
+mysql-connector-python

@@ -22,18 +22,23 @@ This is not just a simple Python script. It's a complete microservices architect
   - **Export/Import**: Share configurations between teams as JSON files.
 
 - **📤 Multi-Output (Sinks)**: Send data wherever you need:
-  - **📂 Files**: JSON, CSV, XML, TOML (Direct download).
+  - **📂 Files**: JSON, CSV, XML, TOML, and TOON (Direct download).
+  - **🗄️ Databases**: PostgreSQL, MongoDB, and MySQL.
   - **📡 IoT/Messaging**: MQTT, Kafka, RabbitMQ.
   - **🌐 Web**: HTTP Webhooks (POST).
 
 - **🤖 Intelligent Generation**:
-  - Realistic data types (Names, Emails, UUID, Geo, IPs).
+  - Realistic data types (Names, Emails, UUID, Geo, IPs, company, job title, URL, IBAN).
   - Weighted distributions (e.g., 80% "OK", 20% "Error").
   - Numeric ranges, dynamic dates, and configurable nulls (% of dirty data).
 
+- **✨ AI Assistant (GROQ)**: Build schemas and suggest sink/config from natural language with `/api/ai/generate-schema`.
+
 - **⚡ Non-Blocking Architecture**: Uses Redis and background Workers. You can launch 50 simultaneous simulations without freezing the interface.
 
-- **🎛️ Total Control**: Start, Stop (immediate), and real-time progress monitoring.
+- **🎛️ Total Control**: Start, Pause, Resume, Stop (immediate), plus history and aggregated stats.
+
+- **🔐 Multi-User Authentication**: Register/login with token-based access and user-level isolation for simulations, history, and files.
 
 - **🏭 Multi-Sensor Mode**: Simulate device fleets (1 to 1000+) by injecting rotating unique IDs.
 
@@ -88,9 +93,23 @@ docker-compose up --build
 
 Open your browser and go to: 👉 **http://localhost**
 
+API docs:
+- Swagger UI (ES): `http://localhost/docs`
+- Swagger UI (EN): `http://localhost/en/docs`
+- ReDoc: `http://localhost/redoc`
+
+AI docs:
+- `AI_ASSISTANT.md` (ES)
+- `AI_ASSISTANT.en.md` (EN)
+
 ---
 
 ## 📖 Usage Guide
+
+### 0. User Access
+
+- Create an account or log in from the top bar.
+- Simulations, history, and file downloads are isolated per user.
 
 ### 1. Global Configuration
 
@@ -107,11 +126,14 @@ Define the general behavior of the simulation:
 
 Select where you want the data to go:
 
-- **File**: Will be saved on the server and you can download them from the sidebar. Supports JSON, CSV, XML, and TOML.
+- **File**: Will be saved on the server and you can download them from the sidebar. Supports JSON, CSV, XML, TOML, and TOON.
 - **MQTT**: Requires Host, Port, and Topic.
 - **Kafka**: Requires Bootstrap Servers and Topic.
 - **HTTP**: Requires endpoint URL (performs POST of JSON).
 - **RabbitMQ**: Requires Host and Queue name.
+- **PostgreSQL**: Host, port, database, user, password, and destination table.
+- **MongoDB**: URI, database, and destination collection.
+- **MySQL**: Host, port, database, user, password, and destination table.
 
 ### 3. Design the Model (Schema)
 
@@ -155,14 +177,14 @@ Add fields dynamically:
 
 1. Click **"LAUNCH NOW"**. The system will automatically validate your configuration.
 2. You'll see real-time progress in the **"Active"** tab of the sidebar.
-3. You can pause the simulation at any time with the **STOP** button.
+3. You can **pause**, **resume**, or **stop** simulations in real-time.
 4. If you chose "File", the download button 📥 will appear in the **"Files"** tab when finished.
 
 ---
 
 ## 🎯 Improved Interface
 
-The new version includes a reorganized interface with **3 tabs** in the sidebar:
+The new version includes a reorganized interface with **5 tabs** in the sidebar:
 
 ### 📌 Sidebar Tabs
 
@@ -177,10 +199,19 @@ The new version includes a reorganized interface with **3 tabs** in the sidebar:
    - Actions: Load, Duplicate, Delete.
    - Export/Import configurations.
 
-3. **📁 Files**: 
+3. **📊 Dashboard**:
+   - Aggregated metrics from recent simulations.
+   - Totals for simulations, generated records, and average duration.
+   - Distribution by status and output format.
+
+4. **📁 Files**: 
    - Generated files available for download.
-   - List refresh button.
+   - Auto-refresh every 3 seconds.
    - Direct download with one click.
+
+5. **🕘 History**:
+   - Latest executed simulations.
+   - Final status, duration, generated volume, and output format.
 
 ---
 
@@ -234,7 +265,7 @@ docker-compose logs -f backend
 
 ## 🆕 Latest Version News
 
-### v2.0 - "Smart Persistence"
+### v2.0 - "Collaborative Data Ops"
 
 ✨ **New Features**:
 
@@ -243,9 +274,16 @@ docker-compose logs -f backend
 - **📋 Duplicate Templates**: Experiment without losing your original configurations.
 - **💾 Export/Import**: Share configurations between teams or projects.
 - **🔍 JSON Preview**: Visualize the result before executing.
+- **🕒 `_timestamp` in preview**: Mirrors real generated output.
+- **⚖️ `choice` weights from UI**: Probability setup directly in the form.
+- **📁 TOON format**: Streaming-oriented blocks separated by `#---`.
+- **🤖 AI Assistant (GROQ)**: Automatic schema generation and sink/config suggestion.
+- **🔐 Multi-user authentication**: Register/login and user-level isolation.
+- **🗄️ Database export**: PostgreSQL, MongoDB, and MySQL.
+- **📈 Dashboard + History**: `/api/simulation/stats` and `/api/simulation/history`.
+- **⏸️⏯️ Live control**: Pause/Resume in addition to Stop.
+- **📚 Bilingual Swagger/ReDoc**: `/docs`, `/en/docs`, `/redoc`.
 - **✅ Improved Validation**: The system verifies the configuration before launching.
-- **🎨 Reorganized Interface**: Tab system for better organization.
-- **🌐 Enhanced Multi-language**: Spanish and English with preference persistence.
 
 ### UX Improvements
 
@@ -318,7 +356,7 @@ Pull Requests are welcome!
 
 - 🔌 New connectors (PostgreSQL, MongoDB, S3, etc.)
 - 📊 Visualization of generated data
-- 🔐 Authentication and multi-user
+- 🔐 Advanced RBAC (roles/permissions) and SSO
 - 📈 Simulation metrics and statistics
 - 🎲 More data types (nested JSON, Arrays, etc.)
 

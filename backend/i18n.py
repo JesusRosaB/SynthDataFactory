@@ -9,13 +9,17 @@ TEXTS = {
             
             ## 🎯 Características
             * **Simulaciones Multi-Salida**: Archivos, MQTT, Kafka, HTTP, RabbitMQ.
+            * **Exportación a BD**: PostgreSQL, MongoDB, MySQL.
             * **Modo Multi-Sensor**: Flotas de IoT.
             * **Generación Inteligente**: Faker, pesos, rangos.
+            * **Asistente IA**: Generación automática de schema con GROQ.
+            * **Autenticación Multi-Usuario**: Login/registro y aislamiento por usuario.
             """,
             "contact_name": "SynthDataFactory",
             "tags": [
                 {"name": "Simulaciones", "description": "Operaciones para crear, controlar y monitorizar simulaciones"},
-                {"name": "Archivos", "description": "Gestión y descarga de archivos generados"}
+                {"name": "Archivos", "description": "Gestión y descarga de archivos generados"},
+                {"name": "Authentication", "description": "Registro, login y sesión de usuarios"}
             ]
         },
         "endpoints": {
@@ -55,13 +59,17 @@ TEXTS = {
             
             ## 🎯 Features
             * **Multi-Output Simulations**: Files, MQTT, Kafka, HTTP, RabbitMQ.
+            * **Database Export**: PostgreSQL, MongoDB, MySQL.
             * **Multi-Sensor Mode**: IoT Fleets.
             * **Smart Generation**: Faker, weighted distributions, ranges.
+            * **AI Assistant**: Automatic schema generation with GROQ.
+            * **Multi-User Authentication**: Login/register and user-level isolation.
             """,
             "contact_name": "SynthDataFactory",
             "tags": [
                 {"name": "Simulations", "description": "Operations to create, control, and monitor simulations"},
-                {"name": "Files", "description": "Management and download of generated files"}
+                {"name": "Files", "description": "Management and download of generated files"},
+                {"name": "Authentication", "description": "User registration, login, and session management"}
             ]
         },
         "endpoints": {

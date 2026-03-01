@@ -2,6 +2,7 @@ import json
 import csv
 import os
 import requests
+import re
 from abc import ABC, abstractmethod
 
 # Librerías opcionales (para que no falle si falta alguna al arrancar)
@@ -20,6 +21,20 @@ except ImportError: toml = None
 try:
     from dict2xml import dict2xml
 except ImportError: dict2xml = None
+try:
+    import psycopg2
+    from psycopg2 import sql as psycopg2_sql
+except ImportError:
+    psycopg2 = None
+    psycopg2_sql = None
+try:
+    import pymongo
+except ImportError:
+    pymongo = None
+try:
+    import mysql.connector as mysql_connector
+except ImportError:
+    mysql_connector = None
 
 class DataSink(ABC):
     @abstractmethod
@@ -27,21 +42,29 @@ class DataSink(ABC):
     @abstractmethod
     def close(self): pass
 
+def _validate_identifier(value: str, label: str) -> str:
+    if not value or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", value):
+        raise ValueError(f"{label} inválido: usa solo letras, números y guion bajo")
+    return value
+
 class FileSink(DataSink):
     def __init__(self, filename, fmt='json'):
         self.filepath = filename
         self.fmt = fmt
         self.first_row = True
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
-        
+
         # Modo Append para ficheros grandes
-        mode = 'w' 
+        mode = 'w'
         self.file = open(self.filepath, mode, encoding='utf-8')
-        
+
         if self.fmt == 'json':
             self.file.write('[')
         elif self.fmt == 'xml':
             self.file.write('<root>\n')
+        elif self.fmt == 'toml':
+            # TOML standard format - will write a single TOML document
+            self.file.write('# TOML Document\n\n')
 
     def send(self, data: dict):
         if self.fmt == 'json':
@@ -52,8 +75,12 @@ class FileSink(DataSink):
             if self.first_row: writer.writeheader()
             writer.writerow(data)
         elif self.fmt == 'toml' and toml:
-            # TOML no soporta listas de objetos nativamente bien en stream,
-            # así que lo guardamos como bloques separados por saltos
+            # TOML standard: writes each record as a table entry
+            record_name = f"record_{hash(frozenset(data.items())) % 10000}"
+            self.file.write(f"[{record_name}]\n")
+            self.file.write(toml.dumps(data) + "\n")
+        elif self.fmt == 'toon' and toml:
+            # TOON format: streaming blocks separated by delimiters
             self.file.write(toml.dumps(data) + "\n#---\n")
         elif self.fmt == 'xml' and dict2xml:
             self.file.write(dict2xml(data, wrap="record", indent="  ") + "\n")
@@ -118,14 +145,108 @@ class ConsoleSink(DataSink):
     def send(self, data: dict): print(f"[LOG] {data}")
     def close(self): pass
 
+class PostgreSQLSink(DataSink):
+    def __init__(self, host, port, database, user, password, table):
+        if not psycopg2:
+            raise Exception("psycopg2-binary no instalado")
+
+        self.table = _validate_identifier(table, "Nombre de tabla PostgreSQL")
+        self.conn = psycopg2.connect(
+            host=host,
+            port=int(port),
+            dbname=database,
+            user=user,
+            password=password
+        )
+        self.conn.autocommit = True
+        self.cur = self.conn.cursor()
+
+        create_stmt = psycopg2_sql.SQL(
+            """
+            CREATE TABLE IF NOT EXISTS {} (
+                id BIGSERIAL PRIMARY KEY,
+                payload JSONB NOT NULL,
+                created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
+            )
+            """
+        ).format(psycopg2_sql.Identifier(self.table))
+        self.cur.execute(create_stmt)
+
+    def send(self, data: dict):
+        insert_stmt = psycopg2_sql.SQL("INSERT INTO {} (payload) VALUES (%s)").format(
+            psycopg2_sql.Identifier(self.table)
+        )
+        self.cur.execute(insert_stmt, [json.dumps(data, ensure_ascii=False)])
+
+    def close(self):
+        try:
+            self.cur.close()
+        finally:
+            self.conn.close()
+
+class MongoDBSink(DataSink):
+    def __init__(self, uri, database, collection):
+        if not pymongo:
+            raise Exception("pymongo no instalado")
+
+        if not database:
+            raise ValueError("Nombre de base de datos MongoDB requerido")
+        if not collection:
+            raise ValueError("Nombre de colección MongoDB requerido")
+        self.client = pymongo.MongoClient(uri)
+        self.collection = self.client[database][collection]
+
+    def send(self, data: dict):
+        self.collection.insert_one(data)
+
+    def close(self):
+        self.client.close()
+
+class MySQLSink(DataSink):
+    def __init__(self, host, port, database, user, password, table):
+        if not mysql_connector:
+            raise Exception("mysql-connector-python no instalado")
+
+        self.table = _validate_identifier(table, "Nombre de tabla MySQL")
+        self.conn = mysql_connector.connect(
+            host=host,
+            port=int(port),
+            database=database,
+            user=user,
+            password=password,
+            autocommit=True
+        )
+        self.cur = self.conn.cursor()
+        self.cur.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS `{self.table}` (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                payload JSON NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+    def send(self, data: dict):
+        self.cur.execute(
+            f"INSERT INTO `{self.table}` (payload) VALUES (%s)",
+            [json.dumps(data, ensure_ascii=False)]
+        )
+
+    def close(self):
+        try:
+            self.cur.close()
+        finally:
+            self.conn.close()
+
 # Factory
 def get_sink(config: dict, sim_id: str, data_dir: str):
     t = config.get('target_type')
     
     if t == 'file':
         fmt = config.get('file_format', 'json')
-        # Asumo que TOON es TOML o un typo, añado TOML y XML
-        fname = os.path.join(data_dir, f"{config['simulation_name']}_{sim_id}.{fmt}")
+        owner_user = config.get("owner_user", "anon")
+        fname = os.path.join(data_dir, f"{owner_user}__{config['simulation_name']}_{sim_id}.{fmt}")
         return FileSink(fname, fmt)
     elif t == 'http':
         return HttpSink(config['http_url'])
@@ -135,6 +256,30 @@ def get_sink(config: dict, sim_id: str, data_dir: str):
         return RabbitMQSink(config['rabbitmq_host'], config['rabbitmq_queue'])
     elif t == 'mqtt':
         return MqttSink(config['mqtt_host'], config['mqtt_port'], config['mqtt_topic'])
+    elif t == 'postgres':
+        return PostgreSQLSink(
+            config['postgres_host'],
+            config.get('postgres_port', 5432),
+            config['postgres_db'],
+            config['postgres_user'],
+            config['postgres_password'],
+            config.get('postgres_table', 'synthetic_data')
+        )
+    elif t == 'mongodb':
+        return MongoDBSink(
+            config.get('mongodb_uri', 'mongodb://localhost:27017'),
+            config['mongodb_db'],
+            config.get('mongodb_collection', 'synthetic_data')
+        )
+    elif t == 'mysql':
+        return MySQLSink(
+            config['mysql_host'],
+            config.get('mysql_port', 3306),
+            config['mysql_db'],
+            config['mysql_user'],
+            config['mysql_password'],
+            config.get('mysql_table', 'synthetic_data')
+        )
     elif t == 'console':
         return ConsoleSink()
     else:
