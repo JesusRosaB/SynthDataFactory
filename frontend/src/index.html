@@ -382,7 +382,7 @@
                         <strong>{{ currentUser }}</strong>
                         <button class="btn btn-sm btn-outline-danger" @click="logout">{{ txt.auth.logout }}</button>
                     </div>
-                    <button class="btn btn-outline-primary" @click="showAIAssistant = true">
+                    <button v-if="aiEnabled" class="btn btn-outline-primary" @click="showAIAssistant = true">
                         <i class="bi bi-stars"></i> {{ txt.buttons.ai_assistant }}
                     </button>
                     <button class="btn btn-outline-info" @click="showPreview = true">
@@ -1056,6 +1056,7 @@
                 currentUser: '',
                 authForm: { username: '', password: '' },
                 newTemplateName: '',
+                aiEnabled: false,
                 aiDescription: '',
                 aiLoading: false,
                 showAutosave: false,
@@ -1102,6 +1103,15 @@
             setInterval(this.pollStatus, 2000);
             this.loadFiles();
             setInterval(this.loadFiles, 3000); // Auto-refresh files every 3 seconds
+            try {
+                const r = await fetch('/api/config/features');
+                if (r.ok) {
+                    const d = await r.json();
+                    this.aiEnabled = d.ai_enabled === true;
+                }
+            } catch (e) {
+                console.error('Could not load features config:', e);
+            }
         },
         methods: {
             async apiFetch(url, options = {}) {

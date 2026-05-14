@@ -76,7 +76,11 @@ def simulation_task(sim_id, config):
     # 4. BUCLE PRINCIPAL
     for i in range(total):
         # A) Chequeo de Parada/Pausa antes de generar
-        current_status = redis_conn.hget(status_key, "status").decode('utf-8')
+        try:
+            current_status = redis_conn.hget(status_key, "status").decode('utf-8')
+        except Exception as e:
+            print(f"Worker: Error leyendo estado Redis en registro {i}: {e}")
+            current_status = "running"
         if current_status == "stopped":
             print(f"Worker: Parada detectada en registro {i}")
             break
@@ -85,7 +89,11 @@ def simulation_task(sim_id, config):
             # Esperar hasta que se reanude o se detenga
             while True:
                 time.sleep(0.5)
-                current_status = redis_conn.hget(status_key, "status").decode('utf-8')
+                try:
+                    current_status = redis_conn.hget(status_key, "status").decode('utf-8')
+                except Exception as e:
+                    print(f"Worker: Error leyendo estado Redis durante pausa: {e}")
+                    current_status = "paused"
                 if current_status == "running":
                     print(f"Worker: Simulación reanudada en registro {i}")
                     break
@@ -123,8 +131,13 @@ def simulation_task(sim_id, config):
         print(f"Error cerrando sink: {e}")
     
     # Solo marcamos como completado si no fue parado manualmente
-    final_status = redis_conn.hget(status_key, "status").decode('utf-8')
-    final_current = int(redis_conn.hget(status_key, "current").decode('utf-8'))
+    try:
+        final_status = redis_conn.hget(status_key, "status").decode('utf-8')
+        final_current = int(redis_conn.hget(status_key, "current").decode('utf-8'))
+    except Exception as e:
+        print(f"Worker: Error leyendo estado final de Redis: {e}")
+        final_status = "error"
+        final_current = 0
     if final_status != "stopped" and final_status != "error":
         redis_conn.hset(status_key, mapping={"status": "completed", "current": total})
 

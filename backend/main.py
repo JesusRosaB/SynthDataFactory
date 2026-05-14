@@ -232,7 +232,7 @@ def create_app(lang: str = "es") -> FastAPI:
 
         config_payload = config.dict()
         config_payload["owner_user"] = current_user
-        q.enqueue(simulation_task, sim_id, config_payload)
+        q.enqueue(simulation_task, sim_id, config_payload, job_timeout=-1)
         
         return {"message": endpoints["start"]["response"], "sim_id": sim_id}
 
@@ -521,6 +521,10 @@ IMPORTANTE: Responde SOLO con el JSON, sin texto adicional."""
 app = create_app(lang="es")
 app_en = create_app(lang="en")
 app.mount("/en", app_en)
+
+@app.get("/api/config/features", include_in_schema=False)
+def get_features():
+    return {"ai_enabled": bool(Config.GROQ_API_KEY)}
 
 @app.get("/", include_in_schema=False)
 def root():
